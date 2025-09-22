@@ -46,13 +46,13 @@ type SharedControllerManager struct {
 }
 
 // NewSharedControllerManager creates a new shared controller manager.
-func NewSharedControllerManager(kubeConfig *rest.Config, metricsPort, healthPort int) *SharedControllerManager {
+func NewSharedControllerManager(ctx context.Context, kubeConfig *rest.Config, metricsPort, healthPort int) *SharedControllerManager {
 	// Create discovery service (errors handled in Start method)
 	discovery, _ := NewControllerManagerDiscovery(kubeConfig)
 
 	// Calculate webhook port with instance offset
 	desiredWebhookPort := 9443 + instance.Index()
-	webhookPort, err := GetAvailablePort(desiredWebhookPort)
+	webhookPort, err := GetAvailablePort(ctx, desiredWebhookPort)
 	if err != nil {
 		// Fallback to original port if GetAvailablePort fails
 		webhookPort = desiredWebhookPort
@@ -337,7 +337,6 @@ func (scm *SharedControllerManager) installControllerCRDs(ctx context.Context) e
 			}
 			return false, nil
 		})
-
 		if err != nil {
 			return fmt.Errorf("failed to establish CRD for controller %s: %w", controllerName, err)
 		}
@@ -419,8 +418,7 @@ func (scm *SharedControllerManager) cleanupUnusedCRDs(ctx context.Context, contr
 	return nil
 }
 
-
-// cleanupStaleDiscovery removes the discovery configmap to prevent readiness check confusion
+// cleanupStaleDiscovery removes the discovery configmap to prevent readiness check confusion.
 func (scm *SharedControllerManager) cleanupStaleDiscovery(ctx context.Context) error {
 	client, err := kubernetes.NewForConfig(scm.kubeConfig)
 	if err != nil {

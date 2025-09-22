@@ -5,7 +5,8 @@
 package main
 
 import (
-	"github.com/rancher-sandbox/rancher-desktop-daemon/pkg/controllers/base"
+	"os"
+
 	// Import rdd controller packages to trigger init() functions.
 	_ "github.com/rancher-sandbox/rancher-desktop-daemon/pkg/controllers/rdd/configmapreplicaset"
 	_ "github.com/rancher-sandbox/rancher-desktop-daemon/pkg/controllers/rdd/notary"
@@ -13,7 +14,5 @@ import (
 )
 
 func main() {
-	external.RunControllers("rdd", func() []base.Controller {
-		return base.GetAllControllers()
-	})
+	os.Exit(external.RunControllers("rdd"))
 }

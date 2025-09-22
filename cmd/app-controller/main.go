@@ -5,14 +5,13 @@
 package main
 
 import (
-	"github.com/rancher-sandbox/rancher-desktop-daemon/pkg/controllers/base"
+	"os"
+
 	// Import app controller packages to trigger init() functions.
 	_ "github.com/rancher-sandbox/rancher-desktop-daemon/pkg/controllers/app/demo"
 	"github.com/rancher-sandbox/rancher-desktop-daemon/pkg/external"
 )
 
 func main() {
-	external.RunControllers("app", func() []base.Controller {
-		return base.GetAllControllers()
-	})
+	os.Exit(external.RunControllers("app"))
 }

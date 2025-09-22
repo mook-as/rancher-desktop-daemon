@@ -7,6 +7,7 @@ package version
 import (
 	"fmt"
 	"os"
+	"reflect"
 
 	"github.com/spf13/pflag"
 )
@@ -82,19 +83,18 @@ func PrintAndExit(format string) {
 	switch format {
 	case "raw":
 		// Print detailed version info like kubectl does
-		fmt.Printf("Version: %s\n", rddVersion.Version)
-		fmt.Printf("GitCommit: %s\n", rddVersion.GitCommit)
-		fmt.Printf("BuildDate: %s\n", rddVersion.BuildDate)
-		fmt.Printf("GoVersion: %s\n", rddVersion.GoVersion)
-		fmt.Printf("Compiler: %s\n", rddVersion.Compiler)
-		fmt.Printf("Platform: %s\n", rddVersion.Platform)
+		value := reflect.ValueOf(rddVersion)
+		for i := range value.NumField() {
+			fmt.Fprintf(os.Stdout, "%s: %s\n", value.Type().Field(i).Name, value.Field(i))
+		}
 	case "true", "":
 		// Print simple version info
-		fmt.Println(rddVersion.String())
+		fmt.Fprintln(os.Stdout, rddVersion.String())
 	default:
 		// Custom version override (like --version=v1.0.0)
-		fmt.Println(format)
+		fmt.Fprintln(os.Stdout, format)
 	}
+	//nolint:revive // This is intentionally exiting when set.
 	os.Exit(0)
 }
 
@@ -107,7 +107,7 @@ func PrintAndExit(format string) {
 //
 // Returns the created flag for additional configuration if needed.
 func AddVersionFlag(flags *pflag.FlagSet) *pflag.Flag {
-	versionFlag := flags.VarPF(&Value{}, "version", "", 
+	versionFlag := flags.VarPF(&Value{}, "version", "",
 		"--version, --version=raw prints version information and quits; --version=vX.Y.Z... sets the reported version")
 	versionFlag.NoOptDefVal = "true" // This allows --version without =value
 	return versionFlag
