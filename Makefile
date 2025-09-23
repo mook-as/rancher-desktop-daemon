@@ -140,7 +140,7 @@ bats-controllers: bats-rdd bats-app
 .PHONY: bats-controllers
 
 # Run all BATS tests
-bats-all: bats-cli bats-service bats-controllers
+bats-all: bats-helpers bats-cli bats-service bats-controllers
 .PHONY: bats-all
 
 # Run BATS tests with timeout to prevent hanging

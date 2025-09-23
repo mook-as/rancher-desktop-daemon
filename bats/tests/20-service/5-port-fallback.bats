@@ -11,13 +11,20 @@ local_teardown() {
 
 # Extract port from kubeconfig server URL
 get_kubeconfig_port() {
-    rdd svc config | grep "server:" | sed 's/.*127\.0\.0\.1:\([0-9]*\).*/\1/'
+    run -0 rdd ctl config view --output='jsonpath={.clusters[0].cluster.server}'
+    sed 's/.*127\.0\.0\.1:\([0-9]*\).*/\1/' <<<"$output"
 }
 
 # Check if a port is available on localhost
 is_port_available() {
     local port="$1"
-    ! netstat -an | grep -q "^tcp4.*127\.0\.0\.1\.$port "
+    # some Linux distros no longer include netstat, but ss is not available on macOS
+    if command -v ss >/dev/null; then
+        run -0 ss -an -f inet
+    else
+        run -0 netstat -an -f inet
+    fi
+    ! grep -q "^tcp.*127\.0\.0\.1\.$port " <<<"$output"
 }
 
 # Test basic functionality without port conflicts
@@ -59,9 +66,9 @@ is_port_available() {
     # Give netcat time to bind
     sleep 1
 
-    # Verify the port is actually occupied by checking netstat
-    run -0 netstat -an
-    assert_output --partial "127.0.0.1.$expected_port"
+    # Verify the port is actually occupied
+    run is_port_available "$expected_port"
+    assert_failure
 
     # Start RDD - it should fall back to a different port
     rdd svc start
@@ -90,11 +97,11 @@ is_port_available() {
     # Give netcat time to bind
     sleep 2
 
-    # Verify both ports are occupied by checking netstat
-    run -0 netstat -an
-    assert_output --partial "127.0.0.1.6443"
-    run -0 netstat -an
-    assert_output --partial "127.0.0.1.$expected_port"
+    # Verify both ports are occupied
+    run is_port_available 6443
+    assert_failure
+    run is_port_available "$expected_port"
+    assert_failure
 
     # Start RDD - it should fall back to a random available port
     rdd svc start

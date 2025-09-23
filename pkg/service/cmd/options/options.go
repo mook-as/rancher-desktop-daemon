@@ -168,8 +168,8 @@ func (o *Options) Complete(ctx context.Context) (*CompletedOptions, error) {
 	o.ControlPlane.Admission.GenericAdmission.RecommendedPluginOrder = rddadmission.AllOrderedPlugins
 
 	// Force external address to localhost to ensure certificate includes 127.0.0.1 in SAN list
-	o.ControlPlane.SecureServing.ExternalAddress = net.ParseIP("127.0.0.1")
-	o.ControlPlane.SecureServing.BindAddress = net.ParseIP("127.0.0.1")
+	o.ControlPlane.SecureServing.ExternalAddress = net.IPv4(127, 0, 0, 1)
+	o.ControlPlane.SecureServing.BindAddress = net.IPv4(127, 0, 0, 1)
 
 	// Handle port fallback mechanism - if the requested port is not available, find an alternative
 	if o.ControlPlane.SecureServing.BindPort != 0 {
