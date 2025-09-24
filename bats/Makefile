@@ -78,3 +78,13 @@ bats-trace: check-bats build-rdd build-all-controllers
 	fi
 	PATH="$(PWD)/../bin:$$PATH" RDD_TRACE=true $(BATS_CORE) "$(FILE)"
 .PHONY: bats-trace
+
+# https://www.shellcheck.net/wiki/SC1091 -- Not following: xxx was not specified as input (see shellcheck -x)
+# https://www.shellcheck.net/wiki/SC2034 -- xxx appears unused. Verify use (or export if used externally)
+# https://www.shellcheck.net/wiki/SC2154 -- xxx is referenced but not assigned
+TEST_FILES := $(shell find helpers tests -name '*.bash' -o -name '*.bats')
+SC_EXCLUDES ?= SC1091,SC2034,SC2154
+lint: $(TEST_FILES)
+	shellcheck --shell=bats --exclude=$(SC_EXCLUDES) $(TEST_FILES)
+	shfmt --language-dialect=bats --indent=4 --diff $(TEST_FILES)
+.PHONY: lint

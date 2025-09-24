@@ -87,6 +87,7 @@ run:
 .PHONY: run
 
 lint:
+	$(MAKE) -C bats lint
 	golangci-lint run
 .PHONY: lint
 
