@@ -44,10 +44,13 @@ ldflags:
 build: build-rdd build-all-controllers
 .PHONY: build
 
-build-rdd:
+GOLANG_SOURCES := $(shell find . -name '*.go') go.mod go.sum
+
+bin/rdd$(EXE): $(GOLANG_SOURCES)
 	CGO_CFLAGS="-DSQLITE_ENABLE_DBSTAT_VTAB=1 -DSQLITE_USE_ALLOCA=1" \
-	CGO_ENABLED=1 go build -tags="$(TAGS)" -buildvcs=false -gcflags="all=${GCFLAGS}" -ldflags="$(LDFLAGS)" -o bin/rdd ./cmd/rdd
-	ls -lh ./bin/rdd
+	CGO_ENABLED=1 go build -tags="$(TAGS)" -buildvcs=false -gcflags="all=${GCFLAGS}" -ldflags="$(LDFLAGS)" -o $@ ./cmd/rdd
+	ls -lh $@
+build-rdd: bin/rdd$(EXE)
 .PHONY: build-rdd
 
 # API Group Controller management - Auto-discovery of API groups
@@ -55,17 +58,18 @@ API_GROUPS := $(notdir $(shell find pkg/controllers -type d -mindepth 1 -maxdept
 
 # Generate build targets for API group controllers
 define API_GROUP_CONTROLLER_TARGETS
-build-$(1)-controller:
-	CGO_ENABLED=0 go build -tags="$(TAGS)" -buildvcs=false -gcflags="all=$${GCFLAGS}" -ldflags="$(LDFLAGS)" -o bin/$(1)-controller ./cmd/$(1)-controller
-	ls -lh ./bin/$(1)-controller
+bin/$(1)-controller$$(EXE): $$(GOLANG_SOURCES)
+	CGO_ENABLED=0 go build -tags="$(TAGS)" -buildvcs=false -gcflags="all=$${GCFLAGS}" -ldflags="$(LDFLAGS)" -o $$@ ./cmd/$(1)-controller
+	ls -lh $$@
+build-$(1)-controller: bin/$(1)-controller$(EXE)
 .PHONY: build-$(1)-controller
 
 test-$(1)-controllers:
 	go test -v ./pkg/controllers/$(1)/...
 .PHONY: test-$(1)-controllers
 
-run-$(1)-controller:
-	./bin/$(1)-controller
+run-$(1)-controller: bin/$(1)-controller$(EXE)
+	$<
 .PHONY: run-$(1)-controller
 endef
 
@@ -82,8 +86,8 @@ test-all-controllers: $(addprefix test-,$(addsuffix -controllers,$(API_GROUPS)))
 run-all-controllers: $(addprefix run-,$(addsuffix -controller,$(API_GROUPS)))
 .PHONY: run-all-controllers
 
-run:
-	./bin/rdd start
+run: bin/rdd$(EXE)
+	$< start
 .PHONY: run
 
 lint:
