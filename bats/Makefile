@@ -28,22 +28,22 @@ bats-helpers: check-bats
 
 # Run CLI tests
 bats-cli: check-bats build-rdd
-	PATH="$(PWD)/../bin:$$PATH" RDD_INSTANCE=bats-cli $(BATS_CORE) tests/10-cli/
+	RDD_INSTANCE=bats-cli $(BATS_CORE) tests/10-cli/
 .PHONY: bats-cli
 
 # Run service tests
 bats-service: check-bats build-rdd
-	PATH="$(PWD)/../bin:$$PATH" RDD_INSTANCE=bats-service $(BATS_CORE) tests/20-service/
+	RDD_INSTANCE=bats-service $(BATS_CORE) tests/20-service/
 .PHONY: bats-service
 
 # Run RDD API group controller tests
 bats-rdd: check-bats build-rdd build-rdd-controller
-	PATH="$(PWD)/../bin:$$PATH" RDD_INSTANCE=bats-rdd-controller $(BATS_CORE) tests/31-rdd-controllers/
+	RDD_INSTANCE=bats-rdd-controller $(BATS_CORE) tests/31-rdd-controllers/
 .PHONY: bats-rdd
 
 # Run app API group controller tests
 bats-app: check-bats build-rdd
-	PATH="$(PWD)/../bin:$$PATH" RDD_INSTANCE=bats-app-controller $(BATS_CORE) tests/32-app-controllers/
+	RDD_INSTANCE=bats-app-controller $(BATS_CORE) tests/32-app-controllers/
 .PHONY: bats-app
 
 # Run all controller tests
@@ -56,7 +56,7 @@ bats-all: bats-helpers bats-cli bats-service bats-controllers
 
 # Run BATS tests with timeout to prevent hanging
 bats-timeout: check-bats build-rdd
-	PATH="$(PWD)/../bin:$$PATH" timeout 600 $(BATS_CORE) tests/
+	timeout 600 $(BATS_CORE) tests/
 .PHONY: bats-timeout
 
 # Run specific BATS test file
@@ -66,7 +66,7 @@ bats-file: check-bats build-rdd build-all-controllers
 		echo "Usage: make bats-file FILE=path/to/test.bats"; \
 		exit 1; \
 	fi
-	PATH="$(PWD)/../bin:$$PATH" $(BATS_CORE) "$(FILE)"
+	$(BATS_CORE) "$(FILE)"
 .PHONY: bats-file
 
 # Run BATS tests with trace output for debugging
@@ -76,7 +76,7 @@ bats-trace: check-bats build-rdd build-all-controllers
 		echo "Usage: make bats-trace FILE=path/to/test.bats"; \
 		exit 1; \
 	fi
-	PATH="$(PWD)/../bin:$$PATH" RDD_TRACE=true $(BATS_CORE) "$(FILE)"
+	RDD_TRACE=true $(BATS_CORE) "$(FILE)"
 .PHONY: bats-trace
 
 # https://www.shellcheck.net/wiki/SC1091 -- Not following: xxx was not specified as input (see shellcheck -x)
