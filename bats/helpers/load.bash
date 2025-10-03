@@ -55,9 +55,8 @@ source "$PATH_BATS_HELPERS/paths.bash"
 # and PATH_* variables from paths.bash
 source "$PATH_BATS_HELPERS/commands.bash"
 
-# Add BATS helper executables to $PATH.  On Windows, we use the Linux version
-# from WSL.
-export PATH="$PATH_BATS_ROOT/bin/${OS/windows/linux}:$PATH"
+# Add repo-root/bin directory to the PATH. This is where the Makefile puts all compiled programs.
+export PATH="$PATH_BATS_ROOT/../bin:$PATH"
 
 # If called from foo() this function will call local_foo() if it exist.
 call_local_function() {
