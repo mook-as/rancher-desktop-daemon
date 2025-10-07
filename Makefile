@@ -87,6 +87,18 @@ test-all-controllers: $(addprefix test-,$(addsuffix -controllers,$(API_GROUPS)))
 run-all-controllers: $(addprefix run-,$(addsuffix -controller,$(API_GROUPS)))
 .PHONY: run-all-controllers
 
+# Code generation targets
+generate-deepcopy:
+	scripts/generate-deepcopy.sh
+.PHONY: generate-deepcopy
+
+generate-crds:
+	scripts/generate-crds.sh
+.PHONY: generate-crds
+
+generate: generate-deepcopy generate-crds
+.PHONY: generate
+
 run: bin/rdd$(EXE)
 	$< start
 .PHONY: run

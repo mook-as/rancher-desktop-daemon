@@ -40,6 +40,7 @@ type ConfigMapStatus struct {
 
 //+kubebuilder:object:root=true
 //+kubebuilder:subresource:status
+//+kubebuilder:resource:shortName=cmrs
 
 // ConfigMapReplicaSet is the Schema for the configmapreplicasets API.
 // This custom resource allows users to declaratively manage multiple ConfigMaps

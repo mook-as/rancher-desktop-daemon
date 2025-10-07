@@ -196,7 +196,7 @@ func (o *Options) Complete(ctx context.Context) (*CompletedOptions, error) {
 		}
 	}
 
-	completedServerRunOptions, err := o.ControlPlane.Complete(nil, nil)
+	completedServerRunOptions, err := o.ControlPlane.Complete(ctx, nil, nil)
 	if err != nil {
 		return nil, err
 	}
