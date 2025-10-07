@@ -11,3 +11,5 @@ rdctl
 rdd
 # shared controller manager
 scm
+# sample controllers
+cmrs

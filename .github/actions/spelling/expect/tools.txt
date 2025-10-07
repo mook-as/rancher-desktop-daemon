@@ -5,8 +5,9 @@ cpanminus
 limactl
 limavm
 ltag
-mindepth
 maxdepth
+mindepth
+mktemp
 moby
 netcat
 
