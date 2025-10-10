@@ -1,6 +1,5 @@
 # Generic golang
 deepcopy
-gomod
 
 # Generic Kubernetes
 apigroup
