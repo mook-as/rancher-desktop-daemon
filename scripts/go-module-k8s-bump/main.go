@@ -186,7 +186,7 @@ func checkDependabotConfig(modules map[string]bool) error {
 		slices.Sort(missing)
 		fmt.Fprintf(os.Stderr, "Dependabot configuration is missing ignore packages:\n")
 		for _, module := range missing {
-			fmt.Fprintf(os.Stderr, "  - { dependency-name: %s } # spellchecker:%s\n", module, "ignore")
+			fmt.Fprintf(os.Stderr, "  - { dependency-name: %s }\n", module)
 		}
 		return errors.New("dependabot configuration is not ignoring Kubernetes packages")
 	}
