@@ -7,6 +7,7 @@ package base
 
 import (
 	"context"
+	"errors"
 	"fmt"
 
 	"k8s.io/apimachinery/pkg/api/meta"
@@ -68,27 +69,21 @@ type CleanupOptions struct {
 	// LabelSelector to find resources to clean up (optional).
 	// If provided, uses efficient label-based filtering.
 	// If empty, lists all resources in namespace and filters by owner UID.
-	LabelSelector map[string]string
+	LabelSelector client.MatchingLabels
 }
 
 // DeleteOwnedResources finds and deletes all resources owned by the given object.
 // This is RDD's replacement for Kubernetes garbage collection.
 //
-// The function always removes any finalizers from owned resources before deletion
-// to ensure complete cleanup when the owner is being deleted.
-//
 // The function attempts to delete all owned resources, collecting errors along the way.
 // If any deletions fail, it returns a combined error, but continues trying to delete
 // remaining resources to make maximum progress per reconciliation.
 //
-// Namespace detection:
-// - For namespaced owners: uses owner.GetNamespace()
-// - For cluster-scoped owners: uses ResourceNamespace interface if implemented
-// - Returns error if namespace cannot be determined
+// DeleteOwnedResources only looks for owned resources in the owner.GetNamespace() namespace.
+// For cluster-scoped objects it uses the ResourceNamespace interface to determine the namespace.
 //
-// Discovery methods:
-// - If opts.LabelSelector is provided, uses efficient label-based filtering
-// - If opts.LabelSelector is empty, lists all resources in namespace and filters by owner UID
+// Use opts.LabelSelector to efficiently filter the set of deletion candidates, if possible.
+// Resources not actually owned by the owner will not be touched.
 func DeleteOwnedResources(ctx context.Context, c client.Client, owner client.Object, opts CleanupOptions) error {
 	logger := log.FromContext(ctx)
 
@@ -101,16 +96,15 @@ func DeleteOwnedResources(ctx context.Context, c client.Client, owner client.Obj
 		return fmt.Errorf("cannot determine namespace for cleanup: owner %q is cluster-scoped but does not implement ResourceNamespace interface", owner.GetName())
 	}
 
-	var listOpts = []client.ListOption{client.InNamespace(namespace)}
-	if len(opts.LabelSelector) > 0 {
-		listOpts = append(listOpts, client.MatchingLabels(opts.LabelSelector))
-	}
+	listOpts := []client.ListOption{client.InNamespace(namespace)}
+	listOpts = append(listOpts, opts.LabelSelector)
 	var errs []error
 
 	for _, resourceList := range opts.ResourceLists {
 		// List() mutates resourceList by populating its Items field
 		if err := c.List(ctx, resourceList, listOpts...); err != nil {
-			errs = append(errs, fmt.Errorf("failed to list resources for cleanup: %w", err))
+			gvk := resourceList.GetObjectKind().GroupVersionKind()
+			errs = append(errs, fmt.Errorf("failed to list %s resources for cleanup: %w", gvk, err))
 			continue // Try next resource type
 		}
 
@@ -118,44 +112,42 @@ func DeleteOwnedResources(ctx context.Context, c client.Client, owner client.Obj
 		_ = meta.EachListItem(resourceList, func(runtimeObj runtime.Object) error {
 			obj, ok := runtimeObj.(client.Object)
 			if !ok {
-				errs = append(errs, fmt.Errorf("item is not a client.Object: %T", runtimeObj))
+				errs = append(errs, fmt.Errorf("item is not a client.Object: %s", runtimeObj.GetObjectKind().GroupVersionKind()))
 				return nil // Continue to next item
 			}
 			if !isOwnedByUID(obj, owner.GetUID()) {
 				return nil // Skip this item, continue iteration
 			}
+			gvk := obj.GetObjectKind().GroupVersionKind()
 
-			// Remove all finalizers before deletion to ensure cleanup completes
-			if len(obj.GetFinalizers()) > 0 {
-				logger.Info("Removing finalizers from owned resource",
-					"resourceType", fmt.Sprintf("%T", obj),
+			// Remove only the RDD finalizer before deletion to allow other controllers to still perform their own cleanup.
+			if controllerutil.ContainsFinalizer(obj, FinalizerName) {
+				logger.Info("Removing RDD finalizer from owned resource",
+					"resourceType", gvk,
 					"resourceNamespace", obj.GetNamespace(),
 					"resourceName", obj.GetName(),
 					"finalizers", obj.GetFinalizers())
 
-				obj.SetFinalizers([]string{})
+				controllerutil.RemoveFinalizer(obj, FinalizerName)
 				if err := c.Update(ctx, obj); err != nil {
-					errs = append(errs, fmt.Errorf("failed to remove finalizers from %q: %w", obj.GetName(), err))
+					errs = append(errs, fmt.Errorf("failed to remove finalizers from %s %s/%s: %w", gvk, obj.GetNamespace(), obj.GetName(), err))
 					return nil // Continue to next item
 				}
 			}
 
 			logger.Info("Deleting owned resource",
-				"resourceType", fmt.Sprintf("%T", obj),
+				"resourceType", obj.GetObjectKind().GroupVersionKind(),
 				"resourceNamespace", obj.GetNamespace(),
 				"resourceName", obj.GetName())
 
 			if err := c.Delete(ctx, obj); err != nil && client.IgnoreNotFound(err) != nil {
-				errs = append(errs, fmt.Errorf("failed to delete resource %q during cleanup: %w", obj.GetName(), err))
+				errs = append(errs, fmt.Errorf("failed to delete %s %s/%s during cleanup: %w", gvk, obj.GetNamespace(), obj.GetName(), err))
 			}
 			return nil // Always continue to next item
 		})
 	}
 
-	if len(errs) > 0 {
-		return fmt.Errorf("failed to delete some owned resources (%d errors): %v", len(errs), errs)
-	}
-	return nil
+	return errors.Join(errs...)
 }
 
 // HasFinalizer checks if a resource has the RDD finalizer.

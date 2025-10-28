@@ -47,9 +47,6 @@ const (
 	configMapValidatorConfigName = "limavm-configmap-validator"
 )
 
-// templateKey is the key used to store the template in the ConfigMap
-const templateKey = "template"
-
 //go:embed crd.yaml
 var limaCRD string
 
@@ -194,30 +191,23 @@ func (d *LimaVMDefaulter) Default(ctx context.Context, obj runtime.Object) error
 		return err
 	}
 
+	// Fetch template data from templateRef
+	templateData, err := d.fetchTemplateRefData(ctx, limavm)
+	if err != nil {
+		return fmt.Errorf("failed to fetch template data: %w", err)
+	}
+
 	// Check if this is a dry-run request
 	if base.IsDryRun(ctx) {
 		klog.V(1).Infof("[DryRun] Webhook validating LimaVM %s/%s (skipping ConfigMap creation)\n", limavm.Namespace, limavm.Name)
 
-		// During dry-run, validate the source templateRef ConfigMap directly
-		// since we won't create the owned ConfigMap copy
-		templateData, err := d.fetchTemplateRefData(ctx, limavm)
-		if err != nil {
-			return fmt.Errorf("failed to fetch template data for validation: %w", err)
-		}
-
 		// Validate the template data
-		if _, err := validateTemplateData(map[string]string{templateKey: templateData}); err != nil {
+		if _, err := validateTemplateData(map[string]string{v1alpha1.TemplateConfigMapKey: templateData}); err != nil {
 			return fmt.Errorf("template validation failed: %w", err)
 		}
 
 		// Don't create ConfigMap in dry-run mode
 		return nil
-	}
-
-	// Fetch template data from templateRef
-	templateData, err := d.fetchTemplateRefData(ctx, limavm)
-	if err != nil {
-		return fmt.Errorf("failed to fetch template data: %w", err)
 	}
 
 	// Create template ConfigMap with label
@@ -233,7 +223,7 @@ func (d *LimaVMDefaulter) Default(ctx context.Context, obj runtime.Object) error
 			},
 		},
 		Data: map[string]string{
-			templateKey: templateData,
+			v1alpha1.TemplateConfigMapKey: templateData,
 		},
 	}
 
@@ -264,7 +254,7 @@ func (d *LimaVMDefaulter) fetchTemplateRefData(ctx context.Context, limavm *v1al
 	if err := d.Client.Get(ctx, configMapKey, configMap); err != nil {
 		return "", fmt.Errorf("failed to get templateRef ConfigMap %q in namespace %q: %w", configMapKey.Name, configMapKey.Namespace, err)
 	}
-	return configMap.Data[templateKey], nil
+	return configMap.Data[v1alpha1.TemplateConfigMapKey], nil
 }
 
 // ConfigMapValidator validates ConfigMap resources that are template ConfigMaps for LimaVM resources
@@ -311,12 +301,12 @@ func (v *ConfigMapValidator) validateTemplateConfigMap(ctx context.Context, obj 
 
 // validateTemplateData validates the template data map from a ConfigMap.
 func validateTemplateData(data map[string]string) (ctrlwebhookadmission.Warnings, error) {
-	templateData, exists := data[templateKey]
+	templateData, exists := data[v1alpha1.TemplateConfigMapKey]
 	if !exists {
-		return nil, fmt.Errorf("template ConfigMap must have a %q data entry", templateKey)
+		return nil, fmt.Errorf("template ConfigMap must have a %q data entry", v1alpha1.TemplateConfigMapKey)
 	}
 	if templateData == "" {
-		return nil, fmt.Errorf("%q data cannot be empty", templateKey)
+		return nil, fmt.Errorf("%q data cannot be empty", v1alpha1.TemplateConfigMapKey)
 	}
 
 	// TODO: Add more specific template validation logic here

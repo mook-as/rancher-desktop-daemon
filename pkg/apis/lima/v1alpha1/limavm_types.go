@@ -8,6 +8,9 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
+// TemplateConfigMapKey is the key used to store the template text in the templateConfigMap.
+const TemplateConfigMapKey = "template"
+
 // TemplateReference specifies a reference to a ConfigMap containing a VM template.
 type TemplateReference struct {
 	// name is the name of the ConfigMap containing the VM template.

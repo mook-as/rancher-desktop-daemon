@@ -319,12 +319,11 @@ func waitForWebhookConfigurations(ctx context.Context, config *rest.Config, cont
 		logger.Info("No webhook configurations expected, skipping webhook readiness check")
 		return nil
 	}
-
-	var webhookNames []string
+	expectedWebhookSet := sets.New[string]()
 	for _, wh := range expectedWebhooks {
-		webhookNames = append(webhookNames, wh.name)
+		expectedWebhookSet.Insert(wh.name)
 	}
-	logger.Info("Waiting for webhook configurations to be created", "webhooks", webhookNames)
+	logger.Info("Waiting for webhook configurations to be created", "webhooks", sets.List(expectedWebhookSet))
 
 	client, err := kubernetes.NewForConfig(config)
 	if err != nil {
@@ -334,7 +333,6 @@ func waitForWebhookConfigurations(ctx context.Context, config *rest.Config, cont
 	validatingClient := client.AdmissionregistrationV1().ValidatingWebhookConfigurations()
 	mutatingClient := client.AdmissionregistrationV1().MutatingWebhookConfigurations()
 
-	expectedWebhookSet := sets.New(webhookNames...)
 	foundWebhooks := sets.New[string]()
 
 	// First, check if any webhooks are already created
@@ -377,9 +375,7 @@ func waitForWebhookConfigurations(ctx context.Context, config *rest.Config, cont
 		case <-ticker.C:
 			// Check for any missing webhook configurations
 			for _, webhook := range expectedWebhooks {
-				alreadyFound := foundWebhooks.Has(webhook.name)
-
-				if alreadyFound {
+				if foundWebhooks.Has(webhook.name) {
 					continue
 				}
 
@@ -390,12 +386,9 @@ func waitForWebhookConfigurations(ctx context.Context, config *rest.Config, cont
 					_, err = validatingClient.Get(ctx, webhook.name, metav1.GetOptions{})
 				}
 				if err == nil {
-					foundWebhooks.Insert(webhook.name)
-					allFound := foundWebhooks.Equal(expectedWebhookSet)
-
 					logger.Info("Webhook configuration became available", "webhook", webhook.name, "type", webhook.webhookType)
-
-					if allFound {
+					foundWebhooks.Insert(webhook.name)
+					if foundWebhooks.IsSuperset(expectedWebhookSet) {
 						logger.Info("All webhook configurations are ready")
 						return nil
 					}

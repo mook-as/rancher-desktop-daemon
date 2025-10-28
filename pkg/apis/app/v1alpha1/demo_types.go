@@ -84,5 +84,5 @@ func (d *Demo) GetResourceNamespace() string {
 	if d.Spec.Namespace != "" {
 		return d.Spec.Namespace
 	}
-	return "default"
+	return metav1.NamespaceDefault
 }

@@ -299,7 +299,7 @@ try() {
 
     local count=0
     while true; do
-        run --separate-stderr "$@"
+        run_e "$@"
         local success
         if ((until_fail)); then
             success=$((status != 0))

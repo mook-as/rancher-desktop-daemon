@@ -62,9 +62,9 @@ func GenerateWebhookPath(gvk schema.GroupVersionKind, webhookType WebhookType) s
 type WebhookType string
 
 const (
-	// ValidatingWebhook indicates this is a validating admission webhook
+	// ValidatingWebhook indicates this is a validating admission webhook.
 	ValidatingWebhook WebhookType = "validating"
-	// MutatingWebhook indicates this is a mutating admission webhook
+	// MutatingWebhook indicates this is a mutating admission webhook.
 	MutatingWebhook WebhookType = "mutating"
 )
 
@@ -131,10 +131,11 @@ func (wm *WebhookManager) GetWebhookType() WebhookType {
 // appropriate webhook manager(s) based on which are provided.
 func SetupWebhookForResource(mgr ctrl.Manager, obj client.Object, config WebhookConfig) ([]*WebhookManager, error) {
 	if config.Validator == nil && config.Defaulter == nil {
-		return nil, fmt.Errorf("config must specify either Validator or Defaulter (or both)")
+		return nil, errors.New("config must specify at least one of either Validator or Defaulter (or both)")
 	}
 
-	// Extract GVK from the resource object
+	// Extract GVK from the scheme type registry.
+	// Don't use obj.GetObjectKind() because the ObjectKind may not be filled in yet.
 	gvks, _, err := mgr.GetScheme().ObjectKinds(obj)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get object kinds: %w", err)

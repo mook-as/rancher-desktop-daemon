@@ -99,7 +99,7 @@ assert_created() {
     echo '{"vmType":"qemu"}' >"$template_file2"
     run -1 rdd limavm create duplicate-vm "$template_file2" -n "$LIMA_TEST_NS"
     assert_output --partial "admission webhook"
-    assert_output --partial "cleaning up ConfigMap"
+    assert_output --partial "Cleaning up created ConfigMap"
 
     # Verify the ConfigMap was cleaned up (should not exist in $LIMA_TEST_NS)
     run -1 rdd ctl get configmap "duplicate-vm" -n "$LIMA_TEST_NS"

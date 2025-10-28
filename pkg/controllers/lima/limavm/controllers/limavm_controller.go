@@ -99,7 +99,7 @@ func (r *LimaVMReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctr
 	}
 
 	// Update status.templateConfigMap to mark initialization as complete
-	limaVM.Status.TemplateConfigMap = limaVM.GetTemplateConfigMapName()
+	limaVM.Status.TemplateConfigMap = configMapName
 	if err := r.Status().Update(ctx, &limaVM); err != nil {
 		logger.Error(err, "Failed to update status")
 		return ctrl.Result{}, err
