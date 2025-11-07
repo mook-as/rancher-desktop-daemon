@@ -20,37 +20,32 @@ const ControllerName = "namespace"
 const APIGroup = "builtin"
 
 func init() {
-	base.RegisterController(NewController())
+	base.RegisterController(&controller{})
 }
 
-// Controller implements the base.Controller interface for namespace lifecycle management.
-type Controller struct{}
+// controller implements the base.Controller interface for namespace lifecycle management.
+type controller struct{}
 
-// Verify that Controller implements base.Controller interface.
-var _ base.Controller = &Controller{}
-
-// NewController creates a new Controller instance.
-func NewController() *Controller {
-	return &Controller{}
-}
+// Verify that controller implements base.Controller interface.
+var _ base.Controller = &controller{}
 
 // GetName returns the controller name.
-func (c *Controller) GetName() string {
+func (c *controller) GetName() string {
 	return ControllerName
 }
 
 // GetAPIGroup returns the API group this controller belongs to.
-func (c *Controller) GetAPIGroup() string {
+func (c *controller) GetAPIGroup() string {
 	return APIGroup
 }
 
 // GetCRDData returns empty string since namespace is a built-in Kubernetes resource.
-func (c *Controller) GetCRDData() string {
+func (c *controller) GetCRDData() string {
 	return ""
 }
 
 // RegisterWithManager implements the complete controller registration.
-func (c *Controller) RegisterWithManager(mgr ctrl.Manager) error {
+func (c *controller) RegisterWithManager(mgr ctrl.Manager) error {
 	klog.InfoS("Setting up namespace controller watch", "controller", ControllerName)
 
 	// Register the controller
