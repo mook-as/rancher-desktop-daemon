@@ -1,0 +1,45 @@
+// SPDX-License-Identifier: Apache-2.0
+// SPDX-FileCopyrightText: SUSE LLC
+// SPDX-FileCopyrightText: The Rancher Desktop Authors
+package tail
+
+import (
+	"context"
+	"fmt"
+	"io"
+
+	"github.com/pulumi/pulumi/sdk/v3/go/common/tail"
+	"github.com/sirupsen/logrus"
+)
+
+// TailFile prints out all of the given file into the given writer.  If follow
+// is true, wait for more lines to be added to the file at end of file;
+// otherwise, just return at end of file.
+func TailFile(ctx context.Context, writer io.Writer, filePath string, follow bool) error {
+	config := tail.Config{
+		ReOpen:        follow,
+		Follow:        follow,
+		CompleteLines: true,
+		Logger:        logrus.StandardLogger(),
+	}
+	t, err := tail.File(filePath, config)
+	if err != nil {
+		return err
+	}
+
+	if !follow {
+		// Signal that we want to stop tailing at EOF.
+		go func() {
+			_ = t.StopAtEOF()
+		}()
+	}
+	go func() {
+		<-ctx.Done()
+		_ = t.Stop()
+	}()
+
+	for line := range t.Lines {
+		fmt.Fprintln(writer, line.Text)
+	}
+	return nil
+}
