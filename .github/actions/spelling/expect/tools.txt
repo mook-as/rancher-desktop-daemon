@@ -10,6 +10,7 @@ mindepth
 mktemp
 moby
 netcat
+Trivy
 
 # golangci-lint & its linter / formatter names
 golangci
