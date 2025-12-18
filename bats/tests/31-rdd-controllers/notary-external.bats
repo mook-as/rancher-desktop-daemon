@@ -38,8 +38,9 @@ assert_process_exited() {
     try --max 20 --delay 1 -- rdd ctl get configmap rdd-controller-manager --namespace rdd-system
 
     # Verify the discovery ConfigMap contains notary controller
-    run -0 rdd ctl get configmap rdd-controller-manager --namespace rdd-system -o jsonpath='{.data.enabledControllers}'
-    assert_output --partial "notary"
+    run -0 --separate-stderr rdd ctl get configmap rdd-controller-manager --namespace rdd-system -o jsonpath='{.data.rdd}'
+    run -0 jq_output '.enabledControllers[]'
+    assert_line "notary"
 }
 
 @test "webhook configuration is created" {

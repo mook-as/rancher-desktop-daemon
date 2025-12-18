@@ -78,7 +78,7 @@ func RunControllers(apiGroupName string) int {
 	wg.Add(1)
 	go func() {
 		defer wg.Done()
-		monitorControlPlane(monitorCtx, config, setupLog, cancelMonitor)
+		monitorControlPlane(monitorCtx, apiGroupName, config, setupLog, cancelMonitor)
 	}()
 
 	// Get available ports for metrics and health endpoints
@@ -95,7 +95,11 @@ func RunControllers(apiGroupName string) int {
 	}
 
 	// Create shared controller manager for this API group
-	sharedManager := controllers.NewSharedControllerManager(ctx, config, metricsPort, healthPort)
+	sharedManager, err := controllers.NewSharedControllerManager(ctx, apiGroupName, config, metricsPort, healthPort)
+	if err != nil {
+		setupLog.Error(err, "Failed to create shared controller manager")
+		return 1
+	}
 
 	// Register only the controllers that should start
 	for _, controller := range controllersToStart {
@@ -122,8 +126,8 @@ func RunControllers(apiGroupName string) int {
 
 // monitorControlPlane monitors the control plane lifecycle and cancels the context when it's no longer available.
 // This allows external controllers to automatically exit when `rdd svc stop` or `rdd svc delete` is called.
-func monitorControlPlane(ctx context.Context, config *rest.Config, log klog.Logger, cancel context.CancelFunc) {
-	discovery, err := controllers.NewControllerManagerDiscovery(config)
+func monitorControlPlane(ctx context.Context, name string, config *rest.Config, log klog.Logger, cancel context.CancelFunc) {
+	discovery, err := controllers.NewControllerManagerDiscovery(config, name)
 	if err != nil {
 		log.Error(err, "Failed to create discovery service for monitoring")
 		return
@@ -194,7 +198,7 @@ func monitorControlPlane(ctx context.Context, config *rest.Config, log klog.Logg
 // shouldStartController checks if an external controller should start based on RDD discovery.
 // Returns true if no RDD controller manager is running or the specific controller is not enabled.
 func shouldStartController(ctx context.Context, config *rest.Config, controllerName string, log klog.Logger) (bool, error) {
-	discovery, err := controllers.NewControllerManagerDiscovery(config)
+	discovery, err := controllers.NewControllerManagerDiscovery(config, "")
 	if err != nil {
 		return false, fmt.Errorf("failed to create discovery service: %w", err)
 	}

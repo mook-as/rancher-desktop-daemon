@@ -6,11 +6,10 @@ package controllers
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"net/http"
 	"slices"
-	"strconv"
-	"strings"
 	"time"
 
 	corev1 "k8s.io/api/core/v1"
@@ -19,27 +18,35 @@ import (
 	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/rest"
 	"k8s.io/klog/v2"
-
-	"github.com/rancher-sandbox/rancher-desktop-daemon/pkg/instance"
 )
 
 const (
-	// ControllerManagerConfigMapName is the name of the ConfigMap that stores controller manager information.
-	ControllerManagerConfigMapName = "rdd-controller-manager"
+	// controllerManagerConfigMapName is the name of the ConfigMap that stores controller manager information.
+	controllerManagerConfigMapName = "rdd-controller-manager"
 
 	// RDDSystemNamespace is the namespace where RDD stores its control plane information.
 	RDDSystemNamespace = "rdd-system"
 )
 
+// ControllerManagerInfo contains discovered information about a running controller manager.
+type ControllerManagerInfo struct {
+	HealthPort         int         `json:"healthPort"`
+	MetricsPort        int         `json:"metricsPort"`
+	EnabledControllers []string    `json:"enabledControllers"`
+	StartTime          metav1.Time `json:"startTime"`
+	HealthEndpoint     string      `json:"healthEndpoint"`
+	MetricsEndpoint    string      `json:"metricsEndpoint"`
+}
+
 // ControllerManagerDiscovery handles service discovery for the shared controller manager.
 type ControllerManagerDiscovery struct {
 	client    kubernetes.Interface
 	namespace string
-	instance  string
+	name      string
 }
 
 // NewControllerManagerDiscovery creates a new discovery service.
-func NewControllerManagerDiscovery(config *rest.Config) (*ControllerManagerDiscovery, error) {
+func NewControllerManagerDiscovery(config *rest.Config, name string) (*ControllerManagerDiscovery, error) {
 	client, err := kubernetes.NewForConfig(config)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create kubernetes client: %w", err)
@@ -48,7 +55,7 @@ func NewControllerManagerDiscovery(config *rest.Config) (*ControllerManagerDisco
 	return &ControllerManagerDiscovery{
 		client:    client,
 		namespace: RDDSystemNamespace,
-		instance:  instance.Name(),
+		name:      name,
 	}, nil
 }
 
@@ -58,41 +65,55 @@ func (d *ControllerManagerDiscovery) RegisterControllerManager(ctx context.Conte
 		return fmt.Errorf("failed to ensure namespace: %w", err)
 	}
 
-	configMap := &corev1.ConfigMap{
+	info := ControllerManagerInfo{
+		HealthPort:         healthPort,
+		MetricsPort:        metricsPort,
+		EnabledControllers: controllers,
+		StartTime:          metav1.NewTime(time.Now().UTC()),
+		HealthEndpoint:     fmt.Sprintf("http://localhost:%d/healthz", healthPort),
+		MetricsEndpoint:    fmt.Sprintf("http://localhost:%d/metrics", metricsPort),
+	}
+	serializedInfo, err := json.Marshal(info)
+	if err != nil {
+		return fmt.Errorf("failed to serialize controller manager info: %w", err)
+	}
+
+	configMap, err := d.client.CoreV1().ConfigMaps(d.namespace).Get(ctx, controllerManagerConfigMapName, metav1.GetOptions{})
+	if err == nil {
+		// Update existing ConfigMap as needed
+		configMap.Data[d.name] = string(serializedInfo)
+		_, err = d.client.CoreV1().ConfigMaps(d.namespace).Update(ctx, configMap, metav1.UpdateOptions{})
+		if err != nil {
+			return fmt.Errorf("failed to update existing controller manager configmap: %w", err)
+		}
+		return nil
+	} else if !errors.IsNotFound(err) {
+		return fmt.Errorf("failed to get existing controller manager configmap: %w", err)
+	}
+
+	// Create the config map
+	configMap = &corev1.ConfigMap{
 		ObjectMeta: metav1.ObjectMeta{
-			Name:      ControllerManagerConfigMapName,
+			Name:      controllerManagerConfigMapName,
 			Namespace: d.namespace,
 			Labels: map[string]string{
 				"app.kubernetes.io/name":      "rancher-desktop-daemon",
 				"app.kubernetes.io/component": "controller-manager",
-				"app.kubernetes.io/instance":  d.instance,
 			},
 		},
 		Data: map[string]string{
-			"instance":           d.instance,
-			"healthPort":         strconv.Itoa(healthPort),
-			"metricsPort":        strconv.Itoa(metricsPort),
-			"enabledControllers": strings.Join(controllers, ","),
-			"startTime":          time.Now().UTC().Format(time.RFC3339),
-			"healthEndpoint":     fmt.Sprintf("http://localhost:%d/healthz", healthPort),
-			"metricsEndpoint":    fmt.Sprintf("http://localhost:%d/metrics", metricsPort),
+			d.name: string(serializedInfo),
 		},
 	}
-
-	// Try to update existing ConfigMap, create if it doesn't exist
-	_, err := d.client.CoreV1().ConfigMaps(d.namespace).Update(ctx, configMap, metav1.UpdateOptions{})
-	if errors.IsNotFound(err) {
-		_, err = d.client.CoreV1().ConfigMaps(d.namespace).Create(ctx, configMap, metav1.CreateOptions{})
-	}
-
+	_, err = d.client.CoreV1().ConfigMaps(d.namespace).Create(ctx, configMap, metav1.CreateOptions{})
 	if err != nil {
 		return fmt.Errorf("failed to register controller manager: %w", err)
 	}
 
 	klog.InfoS("Registered controller manager in cluster",
 		"namespace", d.namespace,
-		"configmap", ControllerManagerConfigMapName,
-		"instance", d.instance,
+		"configmap", controllerManagerConfigMapName,
+		"name", d.name,
 		"controllers", len(controllers))
 
 	return nil
@@ -100,25 +121,44 @@ func (d *ControllerManagerDiscovery) RegisterControllerManager(ctx context.Conte
 
 // UnregisterControllerManager removes the controller manager ConfigMap.
 func (d *ControllerManagerDiscovery) UnregisterControllerManager(ctx context.Context) error {
-	err := d.client.CoreV1().ConfigMaps(d.namespace).Delete(ctx, ControllerManagerConfigMapName, metav1.DeleteOptions{})
+	cm, err := d.client.CoreV1().ConfigMaps(d.namespace).Get(ctx, controllerManagerConfigMapName, metav1.GetOptions{})
 	if errors.IsNotFound(err) {
 		return nil // Already deleted, no error
 	}
 	if err != nil {
-		return fmt.Errorf("failed to unregister controller manager: %w", err)
+		return fmt.Errorf("failed to get controller manager configmap: %w", err)
+	}
+
+	if _, exists := cm.Data[d.name]; !exists {
+		return nil // No entry for this instance, nothing to do
+	}
+
+	delete(cm.Data, d.name)
+	if len(cm.Data) > 0 {
+		// Update the ConfigMap without this instance's entry
+		_, err = d.client.CoreV1().ConfigMaps(d.namespace).Update(ctx, cm, metav1.UpdateOptions{})
+		if err != nil {
+			return fmt.Errorf("failed to update controller manager configmap: %w", err)
+		}
+	} else {
+		// No more entries, delete the ConfigMap
+		err = d.client.CoreV1().ConfigMaps(d.namespace).Delete(ctx, controllerManagerConfigMapName, metav1.DeleteOptions{})
+		if err != nil {
+			return fmt.Errorf("failed to delete controller manager configmap: %w", err)
+		}
 	}
 
 	klog.InfoS("Unregistered controller manager from cluster",
 		"namespace", d.namespace,
-		"configmap", ControllerManagerConfigMapName,
-		"instance", d.instance)
+		"configmap", controllerManagerConfigMapName,
+		"name", d.name)
 
 	return nil
 }
 
 // DiscoverControllerManager finds running controller manager information.
 func (d *ControllerManagerDiscovery) DiscoverControllerManager(ctx context.Context) (*ControllerManagerInfo, error) {
-	configMap, err := d.client.CoreV1().ConfigMaps(d.namespace).Get(ctx, ControllerManagerConfigMapName, metav1.GetOptions{})
+	configMap, err := d.client.CoreV1().ConfigMaps(d.namespace).Get(ctx, controllerManagerConfigMapName, metav1.GetOptions{})
 	if errors.IsNotFound(err) {
 		return nil, nil // No controller manager running
 	}
@@ -126,68 +166,68 @@ func (d *ControllerManagerDiscovery) DiscoverControllerManager(ctx context.Conte
 		return nil, fmt.Errorf("failed to discover controller manager: %w", err)
 	}
 
-	return d.parseControllerManagerInfo(configMap)
+	serializedInfo, exists := configMap.Data[d.name]
+	if !exists {
+		return nil, nil // No entry for this instance
+	}
+
+	var info ControllerManagerInfo
+	if err := json.Unmarshal([]byte(serializedInfo), &info); err != nil {
+		return nil, fmt.Errorf("failed to parse controller manager info: %w", err)
+	}
+	return &info, nil
 }
 
-// IsControllerRunning checks if a specific controller is running in the discovered controller manager.
+// GetEnabledControllers returns the list of all enabled controllers, across all
+// controller managers.  Note that the returned controllers may not be running.
+func (d *ControllerManagerDiscovery) GetEnabledControllers(ctx context.Context) ([]string, error) {
+	configMap, err := d.client.CoreV1().ConfigMaps(d.namespace).Get(ctx, controllerManagerConfigMapName, metav1.GetOptions{})
+	if errors.IsNotFound(err) {
+		return nil, nil // No controller manager running
+	}
+	if err != nil {
+		return nil, fmt.Errorf("failed to discover controller manager: %w", err)
+	}
+
+	var enabledControllers []string
+	for _, serializedInfo := range configMap.Data {
+		var info ControllerManagerInfo
+		if err := json.Unmarshal([]byte(serializedInfo), &info); err != nil {
+			return nil, fmt.Errorf("failed to parse controller manager info: %w", err)
+		}
+
+		enabledControllers = append(enabledControllers, info.EnabledControllers...)
+	}
+
+	return enabledControllers, nil
+}
+
+// IsControllerRunning checks if a specific controller is running in any of the
+// shared controller managers.
 func (d *ControllerManagerDiscovery) IsControllerRunning(ctx context.Context, controllerName string) (bool, *ControllerManagerInfo, error) {
-	info, err := d.DiscoverControllerManager(ctx)
+	configMap, err := d.client.CoreV1().ConfigMaps(d.namespace).Get(ctx, controllerManagerConfigMapName, metav1.GetOptions{})
 	if err != nil {
-		return false, nil, err
-	}
-	if info == nil {
-		return false, nil, nil // No controller manager running
-	}
-
-	// Check if the controller manager is actually accessible
-	if !d.isControllerManagerHealthy(ctx, info) {
-		return false, info, nil
+		if errors.IsNotFound(err) {
+			return false, nil, nil // No controller manager running
+		}
+		return false, nil, fmt.Errorf("failed to discover controller manager: %w", err)
 	}
 
-	// Check if the specific controller is enabled
-	return slices.Contains(info.EnabledControllers, controllerName), info, nil
-}
+	for _, serializedInfo := range configMap.Data {
+		var info ControllerManagerInfo
+		if err := json.Unmarshal([]byte(serializedInfo), &info); err != nil {
+			return false, nil, fmt.Errorf("failed to parse controller manager info: %w", err)
+		}
 
-// ControllerManagerInfo contains discovered information about a running controller manager.
-type ControllerManagerInfo struct {
-	HealthPort         int       `json:"healthPort"`
-	MetricsPort        int       `json:"metricsPort"`
-	EnabledControllers []string  `json:"enabledControllers"`
-	StartTime          time.Time `json:"startTime"`
-	HealthEndpoint     string    `json:"healthEndpoint"`
-	MetricsEndpoint    string    `json:"metricsEndpoint"`
-}
+		if !slices.Contains(info.EnabledControllers, controllerName) {
+			continue // This controller manager does not have the controller enabled.
+		}
 
-// parseControllerManagerInfo converts ConfigMap data to ControllerManagerInfo.
-func (d *ControllerManagerDiscovery) parseControllerManagerInfo(cm *corev1.ConfigMap) (*ControllerManagerInfo, error) {
-	healthPort, err := strconv.Atoi(cm.Data["healthPort"])
-	if err != nil {
-		return nil, fmt.Errorf("invalid healthPort: %w", err)
+		// Check if the controller manager is actually accessible
+		return d.isControllerManagerHealthy(ctx, &info), &info, nil
 	}
 
-	metricsPort, err := strconv.Atoi(cm.Data["metricsPort"])
-	if err != nil {
-		return nil, fmt.Errorf("invalid metricsPort: %w", err)
-	}
-
-	startTime, err := time.Parse(time.RFC3339, cm.Data["startTime"])
-	if err != nil {
-		return nil, fmt.Errorf("invalid startTime: %w", err)
-	}
-
-	var controllers []string
-	if controllersStr := cm.Data["enabledControllers"]; controllersStr != "" {
-		controllers = strings.Split(controllersStr, ",")
-	}
-
-	return &ControllerManagerInfo{
-		HealthPort:         healthPort,
-		MetricsPort:        metricsPort,
-		EnabledControllers: controllers,
-		StartTime:          startTime,
-		HealthEndpoint:     cm.Data["healthEndpoint"],
-		MetricsEndpoint:    cm.Data["metricsEndpoint"],
-	}, nil
+	return false, nil, nil // Controller not found in any controller manager.
 }
 
 // isControllerManagerHealthy checks if the controller manager is responding to health checks.
@@ -221,4 +261,20 @@ func (d *ControllerManagerDiscovery) ensureNamespace(ctx context.Context) error 
 		return nil // Namespace already exists, that's fine
 	}
 	return err
+}
+
+func CleanupDiscovery(ctx context.Context, client *kubernetes.Clientset) error {
+	err := client.CoreV1().ConfigMaps(RDDSystemNamespace).Delete(ctx, controllerManagerConfigMapName, metav1.DeleteOptions{})
+	if errors.IsNotFound(err) {
+		return nil // Already deleted, no error
+	}
+	if err != nil {
+		return fmt.Errorf("failed to delete controller manager configmap: %w", err)
+	}
+
+	klog.InfoS("Cleaned up stale controller manager discovery configmap",
+		"namespace", RDDSystemNamespace,
+		"configmap", controllerManagerConfigMapName)
+
+	return nil
 }
