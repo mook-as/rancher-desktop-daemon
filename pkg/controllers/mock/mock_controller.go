@@ -79,6 +79,16 @@ func (c *controller) setupReconciler(ctx context.Context, mgr ctrl.Manager) erro
 	if err != nil {
 		return err
 	}
+
+	mgr.GetLogger().Info("Setting up Mock VolumeReconciler")
+	err = (&volumeReconciler{
+		Client:   mgr.GetClient(),
+		Recorder: mgr.GetEventRecorderFor(controllerName + "-controller"),
+	}).SetupWithManager(mgr)
+	if err != nil {
+		return err
+	}
+
 	return nil
 }
 

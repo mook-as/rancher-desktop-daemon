@@ -43,3 +43,16 @@ local_teardown_file() {
         assert_line "${image}"
     done
 }
+
+@test "volumes are created" {
+    run -0 cat ../pkg/controllers/mock/testdata/volumes.json
+    run -0 jq_output '.[].Name'
+    mapfile -t volumes <<<"${output}"
+
+    try --max 30 --delay 1 -- rdd ctl get namespace rdd-mocks -o name
+
+    for volume in "${volumes[@]}"; do
+        try --max 30 --delay 1 -- rdd ctl get volume "${volume}" -o name
+        assert_line "volume.containers.rancherdesktop.io/${volume}"
+    done
+}
