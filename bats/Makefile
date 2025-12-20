@@ -63,8 +63,12 @@ bats-lima: check-bats build-rdd
 	RDD_INSTANCE=bats-lima-controller $(BATS_CORE) tests/33-lima-controllers/
 .PHONY: bats-lima
 
+bats-containers: check-bats build-rdd
+	RDD_INSTANCE=bats-containers-controller $(BATS_CORE) tests/34-containers-controllers/
+.PHONY: bats-containers
+
 # Run all controller tests
-bats-controllers: bats-builtin bats-rdd bats-app bats-lima
+bats-controllers: bats-builtin bats-rdd bats-app bats-lima bats-containers
 .PHONY: bats-controllers
 
 # Run all BATS tests

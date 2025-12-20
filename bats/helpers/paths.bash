@@ -10,14 +10,14 @@ if is_macos; then
     PATH_APP_HOME="${HOME}/Library/Application Support/rancher-desktop-${RDD_INSTANCE}"
     PATH_CONFIG="${HOME}/Library/Preferences/rancher-desktop-${RDD_INSTANCE}"
     PATH_CACHE="${HOME}/Library/Caches/rancher-desktop-${RDD_INSTANCE}"
-    PATH_LOGS="${HOME}/Library/Logs/rancher-desktop-${RDD_INSTANCE}"
+    PATH_LOGS="${PATH_APP_HOME}"
 fi
 
 if is_linux; then
     PATH_APP_HOME="${HOME}/.local/share/rancher-desktop-${RDD_INSTANCE}"
     PATH_CONFIG="${HOME}/.config/rancher-desktop-${RDD_INSTANCE}"
     PATH_CACHE="${HOME}/.cache/rancher-desktop-${RDD_INSTANCE}"
-    PATH_LOGS="${PATH_APP_HOME}/logs"
+    PATH_LOGS="${PATH_APP_HOME}"
 fi
 
 # Get the WSL (Unix) path for a Windows shell folder id; for a list of valid ids,
