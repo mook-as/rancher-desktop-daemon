@@ -7,6 +7,7 @@ package main
 import (
 	"context"
 	"fmt"
+	"path/filepath"
 	"strconv"
 
 	"github.com/sirupsen/logrus"
@@ -15,6 +16,7 @@ import (
 	"github.com/rancher-sandbox/rancher-desktop-daemon/pkg/developer"
 	"github.com/rancher-sandbox/rancher-desktop-daemon/pkg/instance"
 	service "github.com/rancher-sandbox/rancher-desktop-daemon/pkg/service/cmd"
+	"github.com/rancher-sandbox/rancher-desktop-daemon/pkg/util/tail"
 )
 
 // logrusLevelToKlog converts current logrus level to klog level.
@@ -45,6 +47,7 @@ func newServiceCommand(ctx context.Context) *cobra.Command {
 		newServiceStopCommand(),
 		newServiceDeleteCommand(),
 		newServiceStatusCommand(),
+		newServiceLogCommand(),
 	)
 	return command
 }
@@ -256,5 +259,28 @@ func newServiceStatusCommand() *cobra.Command {
 			return nil
 		},
 	}
+	return command
+}
+
+func newServiceLogCommand() *cobra.Command {
+	command := &cobra.Command{
+		Use:     "log",
+		Aliases: []string{"logs"},
+		Long:    "Show control plane logs",
+		RunE: func(cmd *cobra.Command, _ []string) error {
+			logrus.SetLevel(logrus.InfoLevel)
+
+			name := "rdd.stderr.log"
+			if ok, _ := cmd.Flags().GetBool("stdout"); ok {
+				name = "rdd.stdout.log"
+			}
+			logPath := filepath.Join(instance.Dir(), name)
+			follow, _ := cmd.Flags().GetBool("follow")
+
+			return tail.TailFile(cmd.Context(), cmd.OutOrStdout(), logPath, follow)
+		},
+	}
+	command.Flags().BoolP("stdout", "o", false, "Print stdout instead of stderr")
+	command.Flags().BoolP("follow", "f", false, "Follow log output")
 	return command
 }
