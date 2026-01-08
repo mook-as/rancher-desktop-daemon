@@ -31,6 +31,8 @@ metadata:
     name: magical_gates
     namespace: k8s.io # containerd namespace, or `moby` if using dockerd
 spec:
+  state: running # Desired state
+status:
   path: /bin/sh
   args: [-c, 'sleep inf']
   image: "sha256:999adf320e40662dc96119a14f07459af9959a081d10ccab7c405257030ab96b"
@@ -43,8 +45,6 @@ spec:
         hostPort: 32768
   labels:
     org.opensuse.base.vendor: openSUSE Project
-  state: Running # Desired state
-status:
   status: Running
   pid: 5059
   exitCode: 0
@@ -65,9 +65,8 @@ status:
     status: False
 ```
 
-If a `Container` object exists that does not actually exist in the container
-engine, it is automatically deleted.  Therefore, creating `Container` objects
-directly is not effective; to create containers, use `ContainerRequest`.
+Deleting a `Container` object causes the finalizer to delete the matching
+container in the container engine.
 
 ### Container actions
 
@@ -75,29 +74,44 @@ We will need to support a variety of actions on containers:
 
 #### Create container
 
-To create a container, create a `ContainerRequest` object:
+To create a container, create a `ContainerCreateRequest` object:
 ```yaml
 apiVersion: containers.rancherdesktop.io/v1alpha1
-kind: ContainerRequest
+kind: ContainerCreateRequest
 metadata:
-  generateName: whatever
-  namespace: rdd-system
+  name: whatever-12345
+  namespace: rancher-desktop
   labels:
-    name: magical_gates
-    namespace: k8s.io # containerd namespace
+    name: magical_gates # If unset, generate one randomly
+    namespace: k8s.io # containerd namespace; defaults to `default` / `moby`.
 spec:
-  # See Container.spec
+  state: running # Default to `running`
+  path: /bin/sh # defaults to image entry point / command
+  args: [-c, 'sleep inf'] # defaults to image entry point / command
+  image: "sha256:999adf320e40662dc96119a14f07459af9959a081d10ccab7c405257030ab96b" # accepts image tag
+  ports: # merged with image defaults
+    - name: 80/tcp
+      bindings:
+      - hostIp: 0.0.0.0
+        hostPort: 32768
+      - hostIp: '::'
+        hostPort: 32768
+  labels: # merged with image labels
+    org.opensuse.base.vendor: openSUSE Project
 status:
   # Resulting .metadata.name, which is the container ID.  It must be in the
-  # same Kubernetes namespace as the ContainerRequest.
+  # same Kubernetes namespace as the ContainerCreateRequest.
   name: 8eb6f2cf72b6616aa743cf9187f350af84c9749dab65474db2530f26745d2ef3
   conditions:
   - type: Finished
     status: True
 ```
 
-The `ContainerRequest` will be deleted soon after the `Finished` condition
+The `ContainerCreateRequest` will be deleted soon after the `Finished` condition
 transitions to `True`.
+
+If `.metadata.labels.namespace` / `.metadata.labels.name` duplicates an existing
+container, an `CreateFailed` status is set with some details.
 
 If multiple `ContainerRequest` objects exist at the same time for the same
 contained `name`/`namespace` pair, the result is undefined.
@@ -114,49 +128,26 @@ Same as logs; there's some special code in `@kubernetes/client-node` that we may
 be able to fork.
 
 #### Delete container
-Create a `ContainerRequest` with `.spec.state` set to `deleted`.
-We can't just delete the Kubernetes object, because it will be recreated as a
-reflection of the containerd object.
-
-Once the container has been removed from the container engine, the Kubernetes
-object will be removed via normal reflection.
+Delete the `Container` object; a finalizer will be used to delete the container,
+at which point the `Container` object will actually be deleted.
 
 ## Images
 
-`Image` objects reflect images in the container engine.
+`Image` objects reflect images in the container engine.  Each tag is represented
+as a new `Image` object (therefore there may be duplication).
 
 ```yaml
 apiVersion: containers.rancherdesktop.io/v1alpha1
 kind: Image
 metadata:
-  name: 'sha256.999adf320e40662dc96119a14f07459af9959a081d10ccab7c405257030ab96b' # Image ID, colon replaced with dot.
-  namespace: rdd-system # not the containerd namespace
-spec:
-  repoDigests:
-  - registry.opensuse.org/opensuse/leap@sha256:999adf320e40662dc96119a14f07459af9959a081d10ccab7c405257030ab96b
-  createdAt: "2025-11-17T03:14:16Z"
-  architecture: arm64
-  os: linux
-  size: 45150437
+  name: 'sha256.999adf320e40662dc96119a14f07459af9959a081d10ccab7c405257030ab96b-12345' # Image ID, colon replaced with dot, with random suffix.
+  namespace: rancher-desktop # not the containerd namespace
   labels:
-    org.opensuse.base.vendor: openSUSE Project
-```
-
-`ImageTag` objects are names for each `Image`.
-
-```yaml
-apiVersion: containers.rancherdesktop.io/v1alpha1
-kind: ImageTag
-metadata:
-  generateName: registry.opensuse.org-opensuse-leap-latest-
-  namespace: rdd-system
-  labels:
-    name: 'registry.opensuse.org/opensuse/leap:latest'
+    # If an image is untagged, `name` and `namespace` are missing.
+    name: 'registry.opensuse.org/opensuse/leap:latest' # image tag
     namespace: moby # containerd namespace
 spec:
-  # refers to `Image` objects, which are not namespaced.
-  imageRef: 'sha256.999adf320e40662dc96119a14f07459af9959a081d10ccab7c405257030ab96b'
-  push: false # If set to true, the image is pushed; see below.
+  push: false
 status:
   conditions:
   - type: PullStarted
@@ -167,14 +158,21 @@ status:
     status: False
 ```
 
-This is split into separate objects so that listing images by tag is easier,
-assuming we never want to list images with no tags.
-
 ### Image Actions
 
 #### Fetch image
-Create an `ImageTag` object, but omit the `imageRef`.  The reconciler will pull
-the corresponding image and fill in the `imageRef` once available.
+Create an `ImagePullRequest` object:
+```yaml
+apiVersion: containers.rancherdesktop.io/v1alpha1
+kind: ImagePullRequest
+metadata:
+  name: image-fetch-12345
+spec:
+  repoTag: 'registry.opensuse.org/opensuse/leap:latest'
+status:
+  - type: Pulled
+    status: False
+```
 
 #### Build image
 Not sure; do something with the `Resource` API maybe?
@@ -192,11 +190,11 @@ We will need a new object type for this; maybe something like
 apiVersion: containers.rancherdesktop.io/v1alpha1
 kind: ImageScanRequest
 metadata:
-  generateName: imageScan-
+  name: image-scan-12345
   namespace: rdd-system # not containerd namespace
 spec:
-  # refers to `Image` objects, which are not namespaced.
-  imageRef: 'sha256.999adf320e40662dc96119a14f07459af9959a081d10ccab7c405257030ab96b'
+  # The `.metadata.name` of an `Image` object.
+  imageRef: 'sha256.999adf320e40662dc96119a14f07459af9959a081d10ccab7c405257030ab96b-12345'
 status:
   conditions:
   - type: Finished
@@ -206,8 +204,9 @@ status:
 ```
 
 #### Untag image
-Update the `ImageTag` with the `.spec.imageRef` set to `deleted`; once processed,
-the `ImageTag` will be removed to reflect the container engine state.
+Delete the `Image` object; the finalizer will untag the image.  If all tags of
+an image are removed, _and_ it is not in use by a container (running or not),
+then the image itself is removed.
 
 ## Volumes
 
@@ -215,7 +214,7 @@ the `ImageTag` will be removed to reflect the container engine state.
 apiVersion: containers.rancherdesktop.io/v1alpha1
 kind: Volume
 metadata:
-  generateName: volume-name- # Based on the containerd name
+  name: volume-name-12345 # based on containerd name / namespace?
   namespace: default # Not related to containerd namespace
   labels:
     name: volume-name
@@ -232,11 +231,16 @@ spec:
 ### Volume Actions
 
 #### Create volume
-Create a `VolumeRequest`:
+Create a `VolumeCreateRequest`:
 ```yaml
 apiVersion: containers.rancherdesktop.io/v1alpha1
-kind: Volume
-metadata: # same as Volume.metadata
+kind: VolumeCreateRequest
+metadata:
+  name: volume-create-12345
+  namespace: default
+  labels:
+    name: volume-name
+    namespace: k8s.io # containerd namespace, or `moby` if using dockerd
 spec: # same as Volume.spec
 status:
   conditions:
@@ -245,8 +249,10 @@ status:
 ```
 Only local volumes are supported initially.
 Parts of `.spec` may be ignored.
+The request is removed some time after the volume has been created.
 
 #### Delete volume
-Create a `VolumeRequest`, with `.spec.scope` set to `deleted`.
-Once the volume has been deleted, the `VolumeRequest` will also be deleted after
-a brief timeout.
+Delete the `Volume` object; finalizers will cause deletion of the container
+engine side volume.
+Webhooks will be needed for validation to reject deleting volumes that are in
+use.
