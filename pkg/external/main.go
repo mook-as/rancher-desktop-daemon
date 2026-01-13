@@ -126,8 +126,8 @@ func RunControllers(apiGroupName string) int {
 
 // monitorControlPlane monitors the control plane lifecycle and cancels the context when it's no longer available.
 // This allows external controllers to automatically exit when `rdd svc stop` or `rdd svc delete` is called.
-func monitorControlPlane(ctx context.Context, name string, config *rest.Config, log klog.Logger, cancel context.CancelFunc) {
-	discovery, err := controllers.NewControllerManagerDiscovery(config, name)
+func monitorControlPlane(ctx context.Context, apiGroupName string, config *rest.Config, log klog.Logger, cancel context.CancelFunc) {
+	discovery, err := controllers.NewControllerManagerDiscoveryGroup(config, apiGroupName)
 	if err != nil {
 		log.Error(err, "Failed to create discovery service for monitoring")
 		return
@@ -198,7 +198,7 @@ func monitorControlPlane(ctx context.Context, name string, config *rest.Config, 
 // shouldStartController checks if an external controller should start based on RDD discovery.
 // Returns true if no RDD controller manager is running or the specific controller is not enabled.
 func shouldStartController(ctx context.Context, config *rest.Config, controllerName string, log klog.Logger) (bool, error) {
-	discovery, err := controllers.NewControllerManagerDiscovery(config, "")
+	discovery, err := controllers.NewControllerManagerDiscovery(config)
 	if err != nil {
 		return false, fmt.Errorf("failed to create discovery service: %w", err)
 	}

@@ -184,7 +184,7 @@ func getRuntimeControllersFromCluster(ctx context.Context) ([]string, error) {
 		return nil, fmt.Errorf("could not get kubeconfig to read running controllers: %w", err)
 	}
 
-	discovery, err := controllers.NewControllerManagerDiscovery(config, "")
+	discovery, err := controllers.NewControllerManagerDiscovery(config)
 	if err != nil {
 		klog.V(2).Infof("getRuntimeControllersFromCluster: discovery creation error: %v", err)
 		return nil, fmt.Errorf("could not create discovery client: %w", err)
@@ -284,16 +284,6 @@ func checkReadiness(ctx context.Context) error {
 	}
 
 	klog.V(2).Infof("Waiting for %d runtime controllers to be ready", len(runtimeControllers))
-	if len(runtimeControllers) == 0 {
-		// No controller managers are found.
-		// Check if API server is ready for basic operations
-		if err := readiness.WaitForReady(ctx, config, false); err == nil {
-			klog.V(2).Info("API server ready but no controllers registered - assuming no controllers mode")
-			return readiness.WaitForReadyWithCRDs(ctx, config, []base.Controller{}, false)
-		}
-		klog.V(2).Info("Waiting for controller manager to register in cluster...")
-		return errors.New("waiting for controller manager to register")
-	}
 
 	// Get the controller objects for the actually running controllers
 	allControllers := base.GetAllControllers()

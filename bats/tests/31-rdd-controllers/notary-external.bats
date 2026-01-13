@@ -38,7 +38,7 @@ assert_process_exited() {
     try --max 20 --delay 1 -- rdd ctl get configmap rdd-controller-manager --namespace rdd-system
 
     # Verify the discovery ConfigMap contains notary controller
-    run -0 --separate-stderr rdd ctl get configmap rdd-controller-manager --namespace rdd-system -o jsonpath='{.data.rdd}'
+    run_e -0 rdd ctl get configmap rdd-controller-manager --namespace rdd-system -o jsonpath='{.data.rdd}'
     run -0 jq_output '.enabledControllers[]'
     assert_line "notary"
 }
@@ -179,10 +179,10 @@ EOF
     controller_pid=$(cat "${BATS_FILE_TMPDIR}/controller_pid")
 
     # Verify the external controller process is currently running
-    run -0 kill -0 "${controller_pid}"
+    kill -0 "${controller_pid}"
 
     # Stop the control plane - this should trigger auto-cleanup of external controllers
-    run -0 rdd svc stop
+    rdd service stop
 
     # Wait for external controller to detect control plane shutdown and exit
     # External controllers check every 2 seconds, allow up to 3 failures (6 seconds), plus buffer

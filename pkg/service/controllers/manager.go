@@ -47,13 +47,13 @@ type SharedControllerManager struct {
 	healthPort    int
 	webhookPort   int
 	started       bool
-	discovery     *ControllerManagerDiscovery
+	discovery     *ControllerManagerDiscoveryGroup
 }
 
 // NewSharedControllerManager creates a new shared controller manager.
 func NewSharedControllerManager(ctx context.Context, name string, kubeConfig *rest.Config, metricsPort, healthPort int) (*SharedControllerManager, error) {
 	// Create discovery service (errors handled in Start method)
-	discovery, err := NewControllerManagerDiscovery(kubeConfig, name)
+	discovery, err := NewControllerManagerDiscoveryGroup(kubeConfig, name)
 	if err != nil {
 		return nil, err
 	}

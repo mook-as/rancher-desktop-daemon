@@ -43,11 +43,17 @@ type ControllerManagerInfo struct {
 type ControllerManagerDiscovery struct {
 	client    kubernetes.Interface
 	namespace string
-	name      string
 }
 
-// NewControllerManagerDiscovery creates a new discovery service.
-func NewControllerManagerDiscovery(config *rest.Config, name string) (*ControllerManagerDiscovery, error) {
+// ControllerManagerDiscoveryGroup handles service discovery for a specific API
+// group.
+type ControllerManagerDiscoveryGroup struct {
+	ControllerManagerDiscovery
+	name string
+}
+
+// NewControllerManagerDiscovery creates a new read-only discovery service.
+func NewControllerManagerDiscovery(config *rest.Config) (*ControllerManagerDiscovery, error) {
 	client, err := kubernetes.NewForConfig(config)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create kubernetes client: %w", err)
@@ -56,12 +62,34 @@ func NewControllerManagerDiscovery(config *rest.Config, name string) (*Controlle
 	return &ControllerManagerDiscovery{
 		client:    client,
 		namespace: RDDSystemNamespace,
-		name:      name,
+	}, nil
+}
+
+// NewControllerManagerDiscoveryGroup creates a new discovery service that can
+// register and unregister controller managers for a given API group.
+func NewControllerManagerDiscoveryGroup(config *rest.Config, apiGroupName string) (*ControllerManagerDiscoveryGroup, error) {
+	client, err := kubernetes.NewForConfig(config)
+	if err != nil {
+		return nil, fmt.Errorf("failed to create kubernetes client: %w", err)
+	}
+
+	return &ControllerManagerDiscoveryGroup{
+		ControllerManagerDiscovery: ControllerManagerDiscovery{
+			client:    client,
+			namespace: RDDSystemNamespace,
+		},
+		name: apiGroupName,
 	}, nil
 }
 
 // RegisterControllerManager creates or updates the ConfigMap with controller manager information.
-func (d *ControllerManagerDiscovery) RegisterControllerManager(ctx context.Context, healthPort, metricsPort int, controllers []string) error {
+func (d *ControllerManagerDiscoveryGroup) RegisterControllerManager(ctx context.Context, healthPort, metricsPort int, controllers []string) error {
+	return d.registerControllerManagerImpl(ctx, healthPort, metricsPort, controllers, true)
+}
+
+// registerControllerManagerImpl is the internal implementation of RegisterControllerManager,
+// with an option to retry on conflict.
+func (d *ControllerManagerDiscoveryGroup) registerControllerManagerImpl(ctx context.Context, healthPort, metricsPort int, controllers []string, allowRetry bool) error {
 	if err := d.ensureNamespace(ctx); err != nil {
 		return fmt.Errorf("failed to ensure namespace: %w", err)
 	}
@@ -123,11 +151,11 @@ func (d *ControllerManagerDiscovery) RegisterControllerManager(ctx context.Conte
 	}
 	_, err = d.client.CoreV1().ConfigMaps(d.namespace).Create(ctx, configMap, metav1.CreateOptions{})
 	if err != nil {
-		if errors.IsAlreadyExists(err) {
+		if allowRetry && errors.IsAlreadyExists(err) {
 			// We hit a race condition, and somebody else created it first.  Try again.
 			// We're not expecting to recurse more than once, because if the config map
 			// exists then we won't hit IsNotFound on the patch attempt.
-			return d.RegisterControllerManager(ctx, healthPort, metricsPort, controllers)
+			return d.registerControllerManagerImpl(ctx, healthPort, metricsPort, controllers, false)
 		}
 		return fmt.Errorf("failed to register controller manager: %w", err)
 	}
@@ -142,9 +170,11 @@ func (d *ControllerManagerDiscovery) RegisterControllerManager(ctx context.Conte
 }
 
 // UnregisterControllerManager removes the controller manager ConfigMap.
-func (d *ControllerManagerDiscovery) UnregisterControllerManager(ctx context.Context) error {
+func (d *ControllerManagerDiscoveryGroup) UnregisterControllerManager(ctx context.Context) error {
 	patchData, err := json.Marshal(map[string]any{
-		d.name: nil,
+		"data": map[string]any{
+			d.name: nil,
+		},
 	})
 	if err != nil {
 		return fmt.Errorf("failed to serialize controller manager patch: %w", err)
@@ -200,7 +230,7 @@ func (d *ControllerManagerDiscovery) UnregisterControllerManager(ctx context.Con
 }
 
 // DiscoverControllerManager finds running controller manager information.
-func (d *ControllerManagerDiscovery) DiscoverControllerManager(ctx context.Context) (*ControllerManagerInfo, error) {
+func (d *ControllerManagerDiscoveryGroup) DiscoverControllerManager(ctx context.Context) (*ControllerManagerInfo, error) {
 	configMap, err := d.client.CoreV1().ConfigMaps(d.namespace).Get(ctx, controllerManagerConfigMapName, metav1.GetOptions{})
 	if errors.IsNotFound(err) {
 		return nil, nil // No controller manager running
