@@ -41,7 +41,7 @@ spec:
 EOF
 
     # LimaVM (lima.rancherdesktop.io)
-    rdd ctl create configmap lima-template -n multi-ns --from-literal=template='{"vmType":"vz"}'
+    rdd ctl create configmap lima-template -n multi-ns --from-literal=template='images: [{"location":"https://foo"}]'
     rdd ctl apply -f - <<EOF
 apiVersion: lima.rancherdesktop.io/v1alpha1
 kind: LimaVM
