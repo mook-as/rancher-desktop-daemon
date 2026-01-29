@@ -26,7 +26,6 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/handler"
 	"sigs.k8s.io/controller-runtime/pkg/log"
 	"sigs.k8s.io/controller-runtime/pkg/predicate"
-	"sigs.k8s.io/controller-runtime/pkg/reconcile"
 
 	containersv1alpha1 "github.com/rancher-sandbox/rancher-desktop-daemon/pkg/apis/containers/v1alpha1"
 )
@@ -40,7 +39,7 @@ type containerReconciler struct {
 	inspects []mobycontainer.InspectResponse
 }
 
-func (r *containerReconciler) Reconcile(ctx context.Context, req ctrl.Request) (reconcile.Result, error) {
+func (r *containerReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Result, error) {
 	var errs []error
 	log := log.FromContext(ctx)
 
@@ -68,9 +67,10 @@ func (r *containerReconciler) Reconcile(ctx context.Context, req ctrl.Request) (
 	gvk, err := r.Client.GroupVersionKindFor(&rddNamespace)
 	if err != nil {
 		log.Error(err, "Failed to get GVK for namespace", "namespace", &rddNamespace)
+		return ctrl.Result{}, err
 	}
 
-	reconcileResult := reconcile.Result{}
+	reconcileResult := ctrl.Result{}
 
 	for _, inspect := range r.inspects {
 		namespacedName := types.NamespacedName{

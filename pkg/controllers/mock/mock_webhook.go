@@ -12,7 +12,6 @@ import (
 	corev1 "k8s.io/api/core/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/runtime"
-	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/klog/v2"
 	ctrl "sigs.k8s.io/controller-runtime"
 	ctrlwebhookadmission "sigs.k8s.io/controller-runtime/pkg/webhook/admission"
@@ -67,8 +66,8 @@ func (c *staticNamespaceNoDeleteValidator) ValidateDelete(ctx context.Context, o
 	}
 	if ns.Name == mockNamespaceName {
 		klog.FromContext(ctx).V(4).Info("Rejecting delete of namespace")
-		return nil, apierrors.NewConflict(
-			schema.GroupResource{Group: "", Resource: "Namespace"},
+		return nil, apierrors.NewForbidden(
+			corev1.SchemeGroupVersion.WithResource("Namespace").GroupResource(),
 			ns.Name,
 			errors.New("deletion of mock namespace is not allowed"),
 		)
