@@ -73,3 +73,22 @@ var PIDFile = sync.OnceValue(func() string {
 var TLSDir = sync.OnceValue(func() string {
 	return filepath.Join(Dir(), "tls")
 })
+
+// ShortDir returns the short directory path for this instance (e.g., ~/.rd2).
+// This is distinct from Dir() which returns the service directory.
+// Lima uses ShortDir() because of socket name length constraints.
+// See docs/design/cmd_service.md for directory documentation.
+var ShortDir = sync.OnceValue(func() string {
+	home, err := os.UserHomeDir()
+	if err != nil {
+		panic(fmt.Errorf("could not get home directory: %w", err))
+	}
+	return filepath.Join(home, ".rd"+Suffix())
+})
+
+// LimaHome returns the LIMA_HOME directory for this instance (e.g., ~/.rd2/lima).
+// Lima uses this directory instead of the service directory because of socket name
+// length constraints.
+var LimaHome = sync.OnceValue(func() string {
+	return filepath.Join(ShortDir(), "lima")
+})

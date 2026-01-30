@@ -83,6 +83,9 @@ linters:
       # https://github.com/mgechev/revive/blob/master/RULES_DESCRIPTIONS.md
       rules:
       - name: blank-imports
+        exclude:
+        # Lima driver files use blank imports to register drivers; e.g., drivers_vz.go imports vz driver.
+        - "**/limavm/drivers_*.go"
       - name: context-as-argument
       - name: context-keys-type
       - name: deep-exit
