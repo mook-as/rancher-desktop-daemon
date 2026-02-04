@@ -54,7 +54,7 @@ type SharedControllerManager struct {
 	metricsPort     int
 	healthPort      int
 	webhookPort     int
-	passThroughPort int
+	passthroughPort int
 	started         bool
 	discovery       *ControllerManagerDiscoveryGroup
 }
@@ -74,8 +74,8 @@ func NewSharedControllerManager(ctx context.Context, name string, kubeConfig *re
 		return nil, fmt.Errorf("failed to get available webhook port: %w", err)
 	}
 
-	desiredPassThroughPort := 9090 + instance.Index()
-	passThroughPort, err := GetAvailablePort(ctx, desiredPassThroughPort)
+	desiredPassthroughPort := 9090 + instance.Index()
+	passthroughPort, err := GetAvailablePort(ctx, desiredPassthroughPort)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get available pass through port: %w", err)
 	}
@@ -86,7 +86,7 @@ func NewSharedControllerManager(ctx context.Context, name string, kubeConfig *re
 		metricsPort:     metricsPort,
 		healthPort:      healthPort,
 		webhookPort:     webhookPort,
-		passThroughPort: passThroughPort,
+		passthroughPort: passthroughPort,
 		registrations:   make([]base.Controller, 0),
 		started:         false,
 		discovery:       discovery,
@@ -211,7 +211,7 @@ func (scm *SharedControllerManager) Start(ctx context.Context) error {
 	}()
 
 	// Add pass through server
-	if err := mgr.Add(manager.RunnableFunc(scm.runPassThroughServer)); err != nil {
+	if err := mgr.Add(manager.RunnableFunc(scm.runPassthroughServer)); err != nil {
 		return fmt.Errorf("failed to add pass through server to manager: %w", err)
 	}
 
@@ -323,13 +323,13 @@ func (scm *SharedControllerManager) registerDiscovery(ctx context.Context) error
 	// Get controller names, filtering out builtin controllers.
 	// Builtin controllers are internal system controllers and should not be registered in discovery.
 	var controllerNames []string
-	var passThroughNames []string
+	var passthroughNames []string
 	for _, registration := range scm.registrations {
 		if registration.GetAPIGroup() != "builtin" {
 			controllerNames = append(controllerNames, registration.GetName())
 		}
-		if httpController, ok := registration.(base.PassThroughController); ok {
-			passThroughNames = append(passThroughNames, httpController.GetPassThroughEndpoints()...)
+		if httpController, ok := registration.(base.PassthroughController); ok {
+			passthroughNames = append(passthroughNames, httpController.GetPassthroughEndpoints()...)
 		}
 	}
 
@@ -341,9 +341,9 @@ func (scm *SharedControllerManager) registerDiscovery(ctx context.Context) error
 	return scm.discovery.RegisterControllerManager(ctx, ControllerManagerInput{
 		HealthPort:          scm.healthPort,
 		MetricsPort:         scm.metricsPort,
-		PassThroughPort:     scm.passThroughPort,
+		PassthroughPort:     scm.passthroughPort,
 		EnabledControllers:  controllerNames,
-		EnabledPassThroughs: passThroughNames,
+		EnabledPassthroughs: passthroughNames,
 	})
 }
 
@@ -458,16 +458,16 @@ func (scm *SharedControllerManager) installControllerCRDs(ctx context.Context) e
 	return nil
 }
 
-func (scm *SharedControllerManager) runPassThroughServer(ctx context.Context) error {
-	hasPassThroughServers := false
+func (scm *SharedControllerManager) runPassthroughServer(ctx context.Context) error {
+	hasPassthroughServers := false
 	log := klog.FromContext(ctx)
 
 	mux := http.NewServeMux()
 	for _, registration := range scm.registrations {
-		if httpController, ok := registration.(base.PassThroughController); ok {
-			hasPassThroughServers = true
-			for _, endpoint := range httpController.GetPassThroughEndpoints() {
-				handler := httpController.GetPassThroughHandler(endpoint)
+		if httpController, ok := registration.(base.PassthroughController); ok {
+			hasPassthroughServers = true
+			for _, endpoint := range httpController.GetPassthroughEndpoints() {
+				handler := httpController.GetPassthroughHandler(endpoint)
 				fullPath := fmt.Sprintf("/%s/", endpoint)
 				log.V(2).Info("Registering pass through endpoint", "controller", registration.GetName(), "endpoint", fullPath)
 				mux.Handle(fullPath, handler)
@@ -475,13 +475,13 @@ func (scm *SharedControllerManager) runPassThroughServer(ctx context.Context) er
 		}
 	}
 
-	if !hasPassThroughServers {
+	if !hasPassthroughServers {
 		klog.V(2).InfoS("No pass through controllers registered, skipping pass through server startup")
 		return nil
 	}
 
 	server := http.Server{
-		Addr:     fmt.Sprintf("localhost:%d", scm.passThroughPort),
+		Addr:     fmt.Sprintf("localhost:%d", scm.passthroughPort),
 		Handler:  mux,
 		ErrorLog: slog.NewLogLogger(logr.ToSlogHandler(klog.FromContext(ctx)), slog.LevelError),
 	}

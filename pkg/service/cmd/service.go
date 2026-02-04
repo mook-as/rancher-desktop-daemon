@@ -737,7 +737,7 @@ func createServerChain(config options.CompletedConfig) (*aggregatorapiserver.API
 	// Basic not found handler
 	notFoundHandler := notfoundhandler.New(config.ControlPlane.Generic.Serializer, genericapifilters.NoMuxAndDiscoveryIncompleteKey)
 
-	// Mux for use with [base.PassThroughController] controllers; see the
+	// Mux for use with [base.PassthroughController] controllers; see the
 	// documentation for that interface.
 	mux := http.NewServeMux()
 	mux.Handle("/", notFoundHandler)
@@ -797,7 +797,7 @@ func createServerChain(config options.CompletedConfig) (*aggregatorapiserver.API
 	if err != nil {
 		return nil, fmt.Errorf("could not create discovery client: %w", err)
 	}
-	mux.Handle("/passthrough/", http.StripPrefix("/passthrough", controllers.NewPassThroughHandler(discovery)))
+	mux.Handle("/passthrough/", http.StripPrefix("/passthrough", controllers.NewPassthroughHandler(discovery)))
 
 	return aggregatorServer, nil
 }

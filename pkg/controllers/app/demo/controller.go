@@ -43,7 +43,7 @@ func newController() base.Controller {
 	c := &controller{}
 	c.passthroughs = map[string]http.Handler{
 		"hello":     http.HandlerFunc(c.handleHello),
-		"websocket": http.HandlerFunc(c.handleWebsocket),
+		"websocket": http.HandlerFunc(c.handleWebSocket),
 	}
 	return c
 }
@@ -51,7 +51,7 @@ func newController() base.Controller {
 // Verify that controller implements base.Controller interface.
 var (
 	_ base.Controller            = &controller{}
-	_ base.PassThroughController = &controller{}
+	_ base.PassthroughController = &controller{}
 )
 
 // GetName returns the controller name.
@@ -69,11 +69,11 @@ func (c *controller) GetCRDData() string {
 	return demoCRD
 }
 
-func (c *controller) GetPassThroughEndpoints() []string {
+func (c *controller) GetPassthroughEndpoints() []string {
 	return slices.Collect(maps.Keys(c.passthroughs))
 }
 
-func (c *controller) GetPassThroughHandler(endpoint string) http.Handler {
+func (c *controller) GetPassthroughHandler(endpoint string) http.Handler {
 	return c.passthroughs[endpoint]
 }
 
@@ -84,22 +84,22 @@ func (c *controller) handleHello(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
-func (c *controller) handleWebsocket(w http.ResponseWriter, r *http.Request) {
+func (c *controller) handleWebSocket(w http.ResponseWriter, r *http.Request) {
 	log := ctrl.LoggerFrom(r.Context())
 	upgrader := &websocket.Upgrader{
 		CheckOrigin: func(_ *http.Request) bool { return true },
 	}
 	conn, err := upgrader.Upgrade(w, r, nil)
 	if err != nil {
-		log.V(5).Info("Failed to upgrade to websocket", "error", err)
-		http.Error(w, "Failed to upgrade to websocket: "+err.Error(), http.StatusBadRequest)
+		log.V(5).Info("Failed to upgrade to WebSocket", "error", err)
+		http.Error(w, "Failed to upgrade to WebSocket: "+err.Error(), http.StatusBadRequest)
 		return
 	}
 	defer conn.Close()
 
-	err = conn.WriteMessage(websocket.TextMessage, []byte("hello from websocket"))
+	err = conn.WriteMessage(websocket.TextMessage, []byte("\nhello from websocket\n"))
 	if err != nil {
-		log.V(5).Info("Failed to write websocket message", "error", err)
+		log.V(5).Info("Failed to write WebSocket message", "error", err)
 	}
 }
 

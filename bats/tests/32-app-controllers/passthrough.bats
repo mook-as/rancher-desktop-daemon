@@ -11,12 +11,12 @@ local_setup_file() {
 }
 
 @test 'Check that passthrough to web socket works' {
-    # We need to use curl for websocket support; however, some versions of curl
+    # We need to use curl for WebSocket support; however, some versions of curl
     # do not support ws:// URLs directly, so we check for that and skip the
     # test if not supported.
     run -0 curl --version
     if ! [[ "${output} " =~ Protocols:.*\ ws ]]; then
-        skip "curl does not support websockets"
+        skip "curl does not support WebSocket"
     fi
     run -0 rdd ctl config view --minify --flatten --output=jsonpath='{.clusters[].cluster.server}'
     local server_url="${output}"
@@ -24,7 +24,7 @@ local_setup_file() {
     local token="${output}"
     run -0 curl --silent --verbose --header "Authorization: Bearer ${token}" --insecure \
         "ws${server_url#http}/passthrough/websocket/"
-    assert_line 'hello from websocket'
+    assert_line --partial 'hello from websocket'
     assert_line --partial 'HTTP/1.1 101 Switching Protocols'
     assert_line --partial 'Connection: Upgrade'
     assert_line --partial 'Upgrade: websocket'

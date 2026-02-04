@@ -33,9 +33,9 @@ const (
 type ControllerManagerInput struct {
 	HealthPort          int      `json:"healthPort"`
 	MetricsPort         int      `json:"metricsPort"`
-	PassThroughPort     int      `json:"-"`
+	PassthroughPort     int      `json:"-"`
 	EnabledControllers  []string `json:"enabledControllers"`
-	EnabledPassThroughs []string `json:"enabledPassThroughs"`
+	EnabledPassthroughs []string `json:"enabledPassthroughs"`
 }
 
 // ControllerManagerInfo contains discovered information about a running controller manager.
@@ -44,7 +44,7 @@ type ControllerManagerInfo struct {
 	StartTime              metav1.Time `json:"startTime"`
 	HealthEndpoint         string      `json:"healthEndpoint"`
 	MetricsEndpoint        string      `json:"metricsEndpoint"`
-	PassThroughEndpoint    string      `json:"passThroughEndpoint"`
+	PassthroughEndpoint    string      `json:"passthroughEndpoint"`
 }
 
 // ControllerManagerDiscovery handles service discovery for the shared controller manager.
@@ -107,7 +107,7 @@ func (d *ControllerManagerDiscoveryGroup) registerControllerManagerImpl(ctx cont
 		StartTime:              metav1.NewTime(time.Now().UTC()),
 		HealthEndpoint:         fmt.Sprintf("http://localhost:%d/healthz", input.HealthPort),
 		MetricsEndpoint:        fmt.Sprintf("http://localhost:%d/metrics", input.MetricsPort),
-		PassThroughEndpoint:    fmt.Sprintf("http://localhost:%d/", input.PassThroughPort),
+		PassthroughEndpoint:    fmt.Sprintf("http://localhost:%d/", input.PassthroughPort),
 	}
 	serializedInfo, err := json.Marshal(info)
 	if err != nil {
@@ -310,10 +310,10 @@ func (d *ControllerManagerDiscovery) IsControllerRunning(ctx context.Context, co
 	return false, nil, nil // Controller not found in any controller manager.
 }
 
-// LookupPassThroughEndpoint looks up the endpoint URL for a given passthrough
+// LookupPassthroughEndpoint looks up the endpoint URL for a given passthrough
 // endpoint name across all controller managers.  If the endpoint is not found,
 // an empty string is returned.
-func (d *ControllerManagerDiscovery) LookupPassThroughEndpoint(ctx context.Context, endpointName string) (string, error) {
+func (d *ControllerManagerDiscovery) LookupPassthroughEndpoint(ctx context.Context, endpointName string) (string, error) {
 	configMap, err := d.client.CoreV1().ConfigMaps(d.namespace).Get(ctx, controllerManagerConfigMapName, metav1.GetOptions{})
 	if err != nil {
 		if errors.IsNotFound(err) {
@@ -328,13 +328,13 @@ func (d *ControllerManagerDiscovery) LookupPassThroughEndpoint(ctx context.Conte
 			return "", fmt.Errorf("failed to parse controller manager info: %w", err)
 		}
 
-		if !slices.Contains(info.EnabledPassThroughs, endpointName) {
+		if !slices.Contains(info.EnabledPassthroughs, endpointName) {
 			continue // This controller manager does not have the endpoint enabled.
 		}
 
 		// Check if the controller manager is actually accessible
 		if d.isControllerManagerHealthy(ctx, &info) {
-			return info.PassThroughEndpoint, nil
+			return info.PassthroughEndpoint, nil
 		}
 	}
 
