@@ -323,13 +323,13 @@ func (scm *SharedControllerManager) registerDiscovery(ctx context.Context) error
 	// Get controller names, filtering out builtin controllers.
 	// Builtin controllers are internal system controllers and should not be registered in discovery.
 	var controllerNames []string
-	var passthroughNames []string
+	passthroughEndpoints := make(map[string][]string)
 	for _, registration := range scm.registrations {
 		if registration.GetAPIGroup() != "builtin" {
 			controllerNames = append(controllerNames, registration.GetName())
 		}
 		if httpController, ok := registration.(base.PassthroughController); ok {
-			passthroughNames = append(passthroughNames, httpController.GetPassthroughEndpoints()...)
+			passthroughEndpoints[registration.GetName()] = httpController.GetPassthroughEndpoints()
 		}
 	}
 
@@ -343,7 +343,7 @@ func (scm *SharedControllerManager) registerDiscovery(ctx context.Context) error
 		MetricsPort:         scm.metricsPort,
 		PassthroughPort:     scm.passthroughPort,
 		EnabledControllers:  controllerNames,
-		EnabledPassthroughs: passthroughNames,
+		EnabledPassthroughs: passthroughEndpoints,
 	})
 }
 
@@ -468,9 +468,10 @@ func (scm *SharedControllerManager) runPassthroughServer(ctx context.Context) er
 			hasPassthroughServers = true
 			for _, endpoint := range httpController.GetPassthroughEndpoints() {
 				handler := httpController.GetPassthroughHandler(endpoint)
-				fullPath := fmt.Sprintf("/%s/", endpoint)
-				log.V(2).Info("Registering pass through endpoint", "controller", registration.GetName(), "endpoint", fullPath)
-				mux.Handle(fullPath, handler)
+				prefix := fmt.Sprintf("/%s/%s", registration.GetName(), endpoint)
+				log.V(2).Info("Registering passthrough endpoint",
+					"controller", registration.GetName(), "endpoint", prefix)
+				mux.Handle(prefix+"/", http.StripPrefix(prefix, handler))
 			}
 		}
 	}

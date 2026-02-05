@@ -737,8 +737,8 @@ func createServerChain(config options.CompletedConfig) (*aggregatorapiserver.API
 	// Basic not found handler
 	notFoundHandler := notfoundhandler.New(config.ControlPlane.Generic.Serializer, genericapifilters.NoMuxAndDiscoveryIncompleteKey)
 
-	// Mux for use with [base.PassthroughController] controllers; see the
-	// documentation for that interface.
+	// Mux exists so we can set up [base.PassthroughController] controllers later
+	// if needed; see the documentation for that interface.
 	mux := http.NewServeMux()
 	mux.Handle("/", notFoundHandler)
 

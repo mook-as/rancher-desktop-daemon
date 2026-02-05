@@ -102,7 +102,7 @@ func TestControllerManagerDiscoveryGroup(t *testing.T) {
 		MetricsPort:         8765,
 		EnabledControllers:  []string{"hello"},
 		PassthroughPort:     passthroughPort,
-		EnabledPassthroughs: []string{"foo", "bar"},
+		EnabledPassthroughs: map[string][]string{"hello": {"foo", "bar"}},
 	}), "failed to register second controller manager")
 
 	// Check that the config map is updated.
@@ -120,7 +120,7 @@ func TestControllerManagerDiscoveryGroup(t *testing.T) {
 			HealthPort:          port,
 			MetricsPort:         8765,
 			EnabledControllers:  []string{"hello"},
-			EnabledPassthroughs: []string{"foo", "bar"},
+			EnabledPassthroughs: map[string][]string{"hello": {"foo", "bar"}},
 		},
 		StartTime:           info.StartTime,
 		HealthEndpoint:      info.HealthEndpoint,
@@ -158,20 +158,25 @@ func TestControllerManagerDiscoveryGroup(t *testing.T) {
 	assert.Check(t, cm.Data[d1.name] == "", "expected first controller manager entry to be removed")
 
 	// LookupPassthroughEndpoint should return the endpoint for enabled passthroughs
-	endpoint, err := d2.LookupPassthroughEndpoint(t.Context(), "foo")
+	endpoint, err := d2.LookupPassthroughEndpoint(t.Context(), "hello", "foo")
 	assert.NilError(t, err, "failed to lookup passthrough endpoint")
 	assert.Check(t, endpoint != "", "expected non-empty endpoint for enabled passthrough")
 	assert.Equal(t, endpoint, info.PassthroughEndpoint, "expected endpoint to match PassthroughEndpoint")
 
 	// Should return empty string for non-existent passthrough
-	endpoint, err = d2.LookupPassthroughEndpoint(t.Context(), "notfound")
+	endpoint, err = d2.LookupPassthroughEndpoint(t.Context(), "hello", "notfound")
 	assert.NilError(t, err, "failed to lookup non-existent passthrough endpoint")
 	assert.Equal(t, endpoint, "", "expected empty endpoint for non-existent passthrough")
 
 	// Should return endpoint for another enabled passthrough
-	endpoint, err = d2.LookupPassthroughEndpoint(t.Context(), "bar")
+	endpoint, err = d2.LookupPassthroughEndpoint(t.Context(), "hello", "bar")
 	assert.NilError(t, err, "failed to lookup second passthrough endpoint")
 	assert.Equal(t, endpoint, info.PassthroughEndpoint, "expected endpoint to match PassthroughEndpoint for 'bar'")
+
+	// Should not return endpoint for the wrong controller
+	endpoint, err = d2.LookupPassthroughEndpoint(t.Context(), "another", "foo")
+	assert.NilError(t, err, "failed to lookup second passthrough endpoint")
+	assert.Equal(t, endpoint, "", "expected empty endpoint for wrong controller")
 
 	// Unregister the second controller manager.
 	assert.NilError(t, d2.UnregisterControllerManager(t.Context()), "failed to unregister second controller manager")

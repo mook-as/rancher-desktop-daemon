@@ -82,6 +82,7 @@ func (c *controller) handleHello(w http.ResponseWriter, r *http.Request) {
 	for k, v := range r.Header {
 		_, _ = fmt.Fprintf(w, "%s = %q\n", k, v)
 	}
+	_, _ = fmt.Fprintf(w, "Path = %q\n", r.URL.Path)
 }
 
 func (c *controller) handleWebSocket(w http.ResponseWriter, r *http.Request) {
@@ -97,7 +98,7 @@ func (c *controller) handleWebSocket(w http.ResponseWriter, r *http.Request) {
 	}
 	defer conn.Close()
 
-	err = conn.WriteMessage(websocket.TextMessage, []byte("\nhello from websocket\n"))
+	err = conn.WriteMessage(websocket.TextMessage, []byte("hello from websocket\n"))
 	if err != nil {
 		log.V(5).Info("Failed to write WebSocket message", "error", err)
 	}

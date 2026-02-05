@@ -31,11 +31,11 @@ const (
 
 // ControllerManagerInput contains the input parameters for registering a controller manager.
 type ControllerManagerInput struct {
-	HealthPort          int      `json:"healthPort"`
-	MetricsPort         int      `json:"metricsPort"`
-	PassthroughPort     int      `json:"-"`
-	EnabledControllers  []string `json:"enabledControllers"`
-	EnabledPassthroughs []string `json:"enabledPassthroughs"`
+	HealthPort          int                 `json:"healthPort"`
+	MetricsPort         int                 `json:"metricsPort"`
+	PassthroughPort     int                 `json:"-"`
+	EnabledControllers  []string            `json:"enabledControllers"`
+	EnabledPassthroughs map[string][]string `json:"enabledPassthroughs"`
 }
 
 // ControllerManagerInfo contains discovered information about a running controller manager.
@@ -313,7 +313,7 @@ func (d *ControllerManagerDiscovery) IsControllerRunning(ctx context.Context, co
 // LookupPassthroughEndpoint looks up the endpoint URL for a given passthrough
 // endpoint name across all controller managers.  If the endpoint is not found,
 // an empty string is returned.
-func (d *ControllerManagerDiscovery) LookupPassthroughEndpoint(ctx context.Context, endpointName string) (string, error) {
+func (d *ControllerManagerDiscovery) LookupPassthroughEndpoint(ctx context.Context, controllerName, endpointName string) (string, error) {
 	configMap, err := d.client.CoreV1().ConfigMaps(d.namespace).Get(ctx, controllerManagerConfigMapName, metav1.GetOptions{})
 	if err != nil {
 		if errors.IsNotFound(err) {
@@ -328,8 +328,9 @@ func (d *ControllerManagerDiscovery) LookupPassthroughEndpoint(ctx context.Conte
 			return "", fmt.Errorf("failed to parse controller manager info: %w", err)
 		}
 
-		if !slices.Contains(info.EnabledPassthroughs, endpointName) {
-			continue // This controller manager does not have the endpoint enabled.
+		enabledPassthroughs := info.EnabledPassthroughs[controllerName]
+		if !slices.Contains(enabledPassthroughs, endpointName) {
+			continue
 		}
 
 		// Check if the controller manager is actually accessible
