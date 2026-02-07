@@ -208,14 +208,14 @@ func (r *LimaVMReconciler) startInstance(ctx context.Context, limaVM *v1alpha1.L
 	haStdoutPath := filepath.Join(inst.Dir, filenames.HostAgentStdoutLog)
 	haStderrPath := filepath.Join(inst.Dir, filenames.HostAgentStderrLog)
 
-	var args []string
+	args := []string{
+		"hostagent",
+		"--pidfile", haPIDPath,
+		"--socket", haSockPath,
+	}
 	if logger.V(1).Enabled() {
 		args = append(args, "--debug")
 	}
-	args = append(args,
-		"hostagent",
-		"--pidfile", haPIDPath,
-		"--socket", haSockPath)
 	if prepared.GuestAgent != "" {
 		args = append(args, "--guestagent", prepared.GuestAgent)
 	}

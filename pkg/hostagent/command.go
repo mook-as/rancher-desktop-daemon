@@ -40,6 +40,7 @@ func NewCommand() *cobra.Command {
 	hostagentCommand.Flags().String("guestagent", "", "Local file path of lima-guestagent")
 	hostagentCommand.Flags().String("nerdctl-archive", "", "Local file path of nerdctl archive")
 	hostagentCommand.Flags().Bool("progress", false, "Show provision script progress")
+	hostagentCommand.Flags().Bool("debug", false, "Enable debug logging")
 	return hostagentCommand
 }
 
@@ -82,6 +83,11 @@ func hostagentAction(cmd *cobra.Command, args []string) error {
 
 	signalCh := make(chan os.Signal, 1)
 	signal.Notify(signalCh, os.Interrupt, syscall.SIGTERM)
+
+	debug, _ := cmd.Flags().GetBool("debug")
+	if debug {
+		logrus.SetLevel(logrus.DebugLevel)
+	}
 
 	stdout := &syncWriter{w: cmd.OutOrStdout()}
 	stderr := &syncWriter{w: cmd.ErrOrStderr()}
