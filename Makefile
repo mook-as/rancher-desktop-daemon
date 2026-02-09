@@ -45,12 +45,26 @@ ldflags:
 build: build-rdd build-all-controllers
 .PHONY: build
 
+# Code signing for macOS - required for Virtualization.framework
+# On macOS, sign binaries with virtualization entitlement using ad-hoc signature
+# On other platforms, this is a no-op
+ifeq ($(shell uname -s),Darwin)
+define ATTACH_ENTITLEMENTS
+codesign --force --verbose --entitlements macos-entitlements.plist --sign - $(1)
+endef
+else
+define ATTACH_ENTITLEMENTS
+@true
+endef
+endif
+
 GOLANG_SOURCES := $(shell find . -name '*.go') go.mod go.sum
 
 bin/rdd$(EXE): $(GOLANG_SOURCES)
 	WSLENV=${WSLENV}:CGO_CFLAGS:CGO_ENABLED \
 	CGO_CFLAGS="-DSQLITE_ENABLE_DBSTAT_VTAB=1 -DSQLITE_USE_ALLOCA=1" CGO_ENABLED=1 \
 	go$(EXE) build -tags="$(TAGS)" -gcflags="all=${GCFLAGS}" -ldflags="$(LDFLAGS)" -o $@ ./cmd/rdd
+	$(call ATTACH_ENTITLEMENTS,$@)
 	ls -lh $@
 build-rdd: bin/rdd$(EXE)
 .PHONY: build-rdd
@@ -69,6 +83,7 @@ define CONTROLLER_TARGETS
 bin/$(1)-controller$$(EXE): $$(GOLANG_SOURCES)
 	WSLENV=${WSLENV}:CGO_ENABLED CGO_ENABLED=$$(or $$(CGO_ENABLED_$(1)),0) \
 	go$$(EXE) build -tags="$(TAGS)" -gcflags="all=$${GCFLAGS}" -ldflags="$(LDFLAGS)" -o $$@ ./cmd/$(1)-controller
+	$$(call ATTACH_ENTITLEMENTS,$$@)
 	ls -lh $$@
 build-$(1)-controller: bin/$(1)-controller$$(EXE)
 .PHONY: build-$(1)-controller

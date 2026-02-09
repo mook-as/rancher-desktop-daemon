@@ -1,14 +1,18 @@
 # Terms specific to Rancher Desktop
+Archs
 ctl
 ctrctl
 devmode
 eio
+genericfeatures
+goruntime
 mountpoint
 nerdctl
 nochange
 rancherdesktop
 rdctl
 rdd
+
 # shared controller manager
 scm
 # sample controllers
@@ -16,6 +20,10 @@ cmrs
 
 # Lima
 basedisk
+cidata
 diffdisk
+guestagent
 limactl
 limavm
+pidfile
+syncer
