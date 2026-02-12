@@ -203,6 +203,9 @@ assert_limavm_not_exists() {
     # shellcheck disable=SC2030 # Persisted via save_var, not subshell
     OLD_HA_PID=$(get_hostagent_pid "${VM_NAME}")
     assert [ -n "${OLD_HA_PID}" ]
+    # Verify the PID is a running process. On Windows the hostagent runs as a
+    # Win32 process but BATS runs inside WSL, so kill can't reach it.
+    kill -0 "${OLD_HA_PID}"
     save_var OLD_HA_PID
 
     kill -9 "${OLD_HA_PID}"

@@ -104,6 +104,7 @@ func (r *LimaVMReconciler) handleRunningState(ctx context.Context, limaVM *v1alp
 					return ctrl.Result{}, err
 				}
 			}
+			// Poll until the hostagent finishes startup and the socket appears.
 			return ctrl.Result{RequeueAfter: 5 * time.Second}, nil
 		}
 
