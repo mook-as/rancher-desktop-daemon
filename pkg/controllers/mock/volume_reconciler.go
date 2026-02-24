@@ -39,6 +39,10 @@ type volumeReconciler struct {
 	inspects []mobyvolume.Volume
 }
 
+func getVolumeName(volume mobyvolume.Volume) (namespace, name string) {
+	return containerNamespace, volume.Name
+}
+
 // Reconcile implements [reconcile.TypedReconciler].
 func (r *volumeReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Result, error) {
 	var errs []error
@@ -83,9 +87,10 @@ func (r *volumeReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctr
 			errs = append(errs, err)
 		}
 
+		namespace, name := getVolumeName(inspect)
 		statusApplyConfig := containersv1alpha1apply.VolumeStatus().
-			WithName(inspect.Name).
-			WithNamespace(containerNamespace).
+			WithName(name).
+			WithNamespace(namespace).
 			WithDriver(inspect.Driver).
 			WithLabels(inspect.Labels).
 			WithOptions(inspect.Options).
