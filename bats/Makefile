@@ -29,7 +29,7 @@ export TMPDIR := $(shell wslpath -u $$(cmd.exe /c "echo %TEMP%"))
 endif
 
 # Run BATS tests for BATS helpers
-bats-helpers: check-bats
+bats-helpers: check-bats build-rdd
 	$(BATS_CORE) helpers/
 .PHONY: bats-helpers
 
@@ -67,11 +67,11 @@ bats-containers: check-bats build-rdd build-mock-controller
 	RDD_INSTANCE=bats-containers-controller $(BATS_CORE) tests/34-containers-controllers/
 .PHONY: bats-containers
 
-# Run all controller tests
+# Run all controller tests.
 bats-controllers: bats-builtin bats-rdd bats-app bats-lima bats-containers
 .PHONY: bats-controllers
 
-# Run all BATS tests
+# Run all BATS tests.
 bats-all: bats-helpers bats-cli bats-service bats-controllers
 .PHONY: bats-all
 

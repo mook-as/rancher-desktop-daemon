@@ -117,6 +117,50 @@ Show control plane logs.
 - `--stdout` (`-o`): Print stdout instead of stderr (default is stderr)
 - `--follow` (`-f`): Follow log output
 
+## `rdd service paths`
+
+Prints instance directory and file paths. Accepts an optional key argument to print a single path.
+
+| Key | Description |
+| --- | --- |
+| `dir` | Service directory (`$APPDATA/rancher-desktop-$INSTANCE`) |
+| `log_dir` | Log directory |
+| `short_dir` | Short directory (e.g. `~/.rd2`) |
+| `lima_home` | Lima home directory (`$short_dir/lima`) |
+| `tls_dir` | TLS certificate directory |
+| `config` | RDD control plane config file path |
+| `pid_file` | PID file path |
+| `args_file` | Saved arguments file path |
+
+Output formats (`--output`, `-o`):
+
+*   `table` (default): aligned key-value table for human readability.
+
+*   `json`: JSON object with all keys.
+
+*   `shell`: `export` statements with `RDD_` prefix suitable for `source`, e.g. `export RDD_LOG_DIR="/path/to/logs"`.
+
+With a key argument and table output, only the value is printed (no key prefix), so the result can be used directly in scripts.
+
+Examples:
+
+```console
+$ rdd svc paths
+args_file  /path/to/rancher-desktop-default/rdd.args
+config     /path/to/rancher-desktop-default/config.json
+dir        /path/to/rancher-desktop-default
+lima_home  /path/to/.rd2/lima
+log_dir    /path/to/rancher-desktop-default/log
+pid_file   /path/to/rancher-desktop-default/rdd.pid
+short_dir  /path/to/.rd2
+tls_dir    /path/to/rancher-desktop-default/tls
+
+$ rdd svc paths log_dir
+/path/to/rancher-desktop-default/log
+
+$ source <(rdd svc paths --output=shell)
+```
+
 ## `rdd service config`
 
 Prints a kube config with context and service account[^sa] setup to give access to the RDD control plane.

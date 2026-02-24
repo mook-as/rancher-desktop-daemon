@@ -13,7 +13,6 @@ import (
 	"net/http"
 	"os"
 	"os/exec"
-	"path/filepath"
 	"runtime"
 	"slices"
 	"strconv"
@@ -67,6 +66,7 @@ import (
 	"github.com/rancher-sandbox/rancher-desktop-daemon/pkg/service/controllers"
 	"github.com/rancher-sandbox/rancher-desktop-daemon/pkg/service/datastore"
 	"github.com/rancher-sandbox/rancher-desktop-daemon/pkg/service/readiness"
+	"github.com/rancher-sandbox/rancher-desktop-daemon/pkg/util/logfile"
 	"github.com/rancher-sandbox/rancher-desktop-daemon/pkg/util/process"
 )
 
@@ -85,9 +85,9 @@ func GetKubeconfig() ([]byte, error) {
 	if !Running() {
 		return nil, fmt.Errorf("control plane %q is not running", instance.Name())
 	}
-	data, err := os.ReadFile(instance.KubeConfig())
+	data, err := os.ReadFile(instance.Config())
 	if err != nil {
-		return nil, fmt.Errorf("could not read kubeconfig from %s: %w (control plane may still be starting)", instance.KubeConfig(), err)
+		return nil, fmt.Errorf("could not read config from %s: %w (control plane may still be starting)", instance.Config(), err)
 	}
 	return data, nil
 }
@@ -108,8 +108,8 @@ func storeKubeConfigToDisk(adminToken, userToken, serverURL, tlsServerName strin
 	if err != nil {
 		return fmt.Errorf("failed to marshal kubeconfig: %w", err)
 	}
-	if err := os.WriteFile(instance.KubeConfig(), data, 0o600); err != nil {
-		return fmt.Errorf("failed to write kubeconfig to %s: %w", instance.KubeConfig(), err)
+	if err := os.WriteFile(instance.Config(), data, 0o600); err != nil {
+		return fmt.Errorf("failed to write config to %s: %w", instance.Config(), err)
 	}
 	return nil
 }
@@ -213,20 +213,17 @@ func Start(ctx context.Context, args []string) error {
 		return fmt.Errorf("%q control plane is already running", instance.Name())
 	}
 
-	// TODO The log files should eventually move to the log directory
-	stdoutPath := filepath.Join(instance.Dir(), "rdd.stdout.log")
-	stderrPath := filepath.Join(instance.Dir(), "rdd.stderr.log")
-	if err := os.RemoveAll(stdoutPath); err != nil {
-		return err
+	keepLogs := os.Getenv("RDD_KEEP_LOGS") != ""
+	title := os.Getenv("RDD_LOG_TITLE")
+	var header string
+	if title != "" {
+		header = "=== " + title + " ===\n"
 	}
-	if err := os.RemoveAll(stderrPath); err != nil {
-		return err
-	}
-	stdout, err := os.Create(stdoutPath)
+	stdout, err := logfile.Create(instance.LogDir(), "rdd.stdout", keepLogs, header)
 	if err != nil {
 		return err
 	}
-	stderr, err := os.Create(stderrPath)
+	stderr, err := logfile.Create(instance.LogDir(), "rdd.stderr", keepLogs, header)
 	if err != nil {
 		return err
 	}
@@ -369,14 +366,14 @@ func StopWithWait(wait bool) error {
 				return fmt.Errorf("timed out waiting for %q control plane with pid %d to stop", instance.Name(), pid)
 			case <-ticker.C:
 				if !Running() {
-					_ = os.Remove(instance.KubeConfig()) // Ignore error as file might not exist
+					_ = os.Remove(instance.Config()) // Ignore error as file might not exist
 					return nil
 				}
 			}
 		}
 	}
 
-	_ = os.Remove(instance.KubeConfig()) // Ignore error as file might not exist
+	_ = os.Remove(instance.Config()) // Ignore error as file might not exist
 	return nil
 }
 
@@ -413,6 +410,9 @@ func Delete() error {
 		return fmt.Errorf("%q control plane does not exist", instance.Name())
 	}
 	_ = Stop()
+	if os.Getenv("RDD_KEEP_LOGS") == "" {
+		_ = os.RemoveAll(instance.LogDir())
+	}
 	return os.RemoveAll(instance.Dir())
 }
 

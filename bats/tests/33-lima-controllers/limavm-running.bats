@@ -30,8 +30,8 @@ local_setup_file() {
 
 local_teardown_file() {
     # Clean up any remaining Lima instances
-    if [[ -d "${LIMA_HOME}/${VM_NAME}" ]]; then
-        rm -rf "${LIMA_HOME:?}/${VM_NAME}"
+    if [[ -d "${RDD_LIMA_HOME}/${VM_NAME}" ]]; then
+        rm -rf "${RDD_LIMA_HOME:?}/${VM_NAME}"
     fi
 }
 
@@ -91,7 +91,7 @@ assert_stdout_logs_contain() {
 
 lima_instance_running() {
     local name=$1
-    assert_file_exists "${LIMA_HOME}/${name}/ha.pid"
+    assert_file_exists "${RDD_LIMA_HOME}/${name}/ha.pid"
 }
 
 get_instance_running_transition_time() {
@@ -102,7 +102,7 @@ get_instance_running_transition_time() {
 
 get_hostagent_pid() {
     local name=$1
-    cat "${LIMA_HOME}/${name}/ha.pid"
+    cat "${RDD_LIMA_HOME}/${name}/ha.pid"
 }
 
 assert_recovery_completed() {
@@ -246,7 +246,7 @@ EOF
 }
 
 @test "simulate crash by killing hostagent" {
-    local pid_file="${LIMA_HOME}/${VM_NAME}/ha.pid"
+    local pid_file="${RDD_LIMA_HOME}/${VM_NAME}/ha.pid"
     assert_file_exists "${pid_file}"
 
     # shellcheck disable=SC2030 # Persisted via save_var, not subshell
@@ -273,7 +273,7 @@ EOF
 }
 
 @test "verify new hostagent after crash recovery" {
-    local pid_file="${LIMA_HOME}/${VM_NAME}/ha.pid"
+    local pid_file="${RDD_LIMA_HOME}/${VM_NAME}/ha.pid"
     assert_file_exists "${pid_file}"
     local new_pid
     new_pid=$(get_hostagent_pid "${VM_NAME}")
@@ -292,7 +292,7 @@ EOF
 # without killing the VM process (which on VZ runs inside the hostagent).
 
 @test "simulate broken state by replacing hostagent socket" {
-    local sock_file="${LIMA_HOME}/${VM_NAME}/ha.sock"
+    local sock_file="${RDD_LIMA_HOME}/${VM_NAME}/ha.sock"
     assert_socket_exists "${sock_file}"
 
     # Replace the Unix socket with a regular file so Lima can't connect
@@ -317,7 +317,7 @@ EOF
 }
 
 @test "verify hostagent is alive after recovery" {
-    local pid_file="${LIMA_HOME}/${VM_NAME}/ha.pid"
+    local pid_file="${RDD_LIMA_HOME}/${VM_NAME}/ha.pid"
     assert_file_exists "${pid_file}"
     local pid
     pid=$(cat "${pid_file}")
