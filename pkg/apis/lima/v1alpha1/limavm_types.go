@@ -65,7 +65,9 @@ type LimaVMStatus struct {
 	TemplateConfigMap string `json:"templateConfigMap,omitempty"`
 
 	// observedTemplateResourceVersion tracks the resourceVersion of the template
-	// ConfigMap last written to the instance's lima.yaml on disk.
+	// ConfigMap last applied to the instance. For stopped instances, this is
+	// updated after writing lima.yaml to disk. For running instances, it is
+	// deferred until the restart completes.
 	// When this differs from the ConfigMap's current resourceVersion, the
 	// reconciler checks for template changes.
 	// +optional

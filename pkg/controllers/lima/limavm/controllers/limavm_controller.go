@@ -352,13 +352,14 @@ func (r *LimaVMReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctr
 // For running instances, it sets status.restartNeeded so the existing restart
 // machinery handles the stop/start cycle.
 //
-// The method updates observedTemplateResourceVersion only after all side effects
-// succeed. If the status update fails, the next reconcile re-enters this method
-// (stale observed version) and retries safely.
+// When a restart is pending, the method defers the observedTemplateResourceVersion
+// update until after the restart completes. This prevents a race where observers
+// see the new version while Running=True still reflects the pre-restart state.
+// The next reconcile re-enters this method (stale observed version), finds the
+// on-disk template identical, and records the version then.
 //
-// Returns a non-zero result only when a restart was triggered (the caller
-// should let the next reconcile handle it). All other paths return an empty
-// result so the caller falls through to handleRunningState.
+// All paths return an empty result so the caller falls through to
+// handleRunningState.
 func (r *LimaVMReconciler) handleTemplateUpdate(ctx context.Context, limaVM *v1alpha1.LimaVM, templateConfigMap *corev1.ConfigMap) (ctrl.Result, error) {
 	logger := log.FromContext(ctx)
 
@@ -371,6 +372,10 @@ func (r *LimaVMReconciler) handleTemplateUpdate(ctx context.Context, limaVM *v1a
 	newTemplate := templateConfigMap.Data[v1alpha1.TemplateConfigMapKey]
 
 	if string(diskTemplate) == newTemplate {
+		if limaVM.Status.RestartNeeded {
+			// Defer the version update until after the restart completes.
+			return ctrl.Result{}, nil
+		}
 		// A ConfigMap update that doesn't change the template key (e.g. label
 		// change) still bumps resourceVersion; recording it avoids repeated
 		// comparisons on subsequent reconciles.
@@ -403,18 +408,17 @@ func (r *LimaVMReconciler) handleTemplateUpdate(ctx context.Context, limaVM *v1a
 		return ctrl.Result{}, err
 	}
 
+	if limaVM.Status.RestartNeeded {
+		// Defer the version update until after the restart completes.
+		return ctrl.Result{}, nil
+	}
+
 	// Persist observedTemplateResourceVersion after the disk write succeeds.
-	// Use Patch to avoid conflicts with the restartNeeded write above.
 	patch := client.MergeFrom(limaVM.DeepCopy())
 	limaVM.Status.ObservedTemplateResourceVersion = templateConfigMap.ResourceVersion
 	if err := r.Status().Patch(ctx, limaVM, patch); err != nil {
 		logger.Error(err, "Failed to update observedTemplateResourceVersion")
 		return ctrl.Result{}, err
-	}
-
-	if limaVM.Status.RestartNeeded {
-		// Let the next reconcile handle the restart via handleRestartNeeded.
-		return ctrl.Result{}, nil
 	}
 	return ctrl.Result{}, nil
 }
