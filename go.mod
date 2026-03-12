@@ -12,6 +12,7 @@ require (
 	github.com/k3s-io/kine v1.14.2
 	github.com/lima-vm/lima/v2 v2.0.3
 	github.com/mattn/go-isatty v0.0.20
+	github.com/mikefarah/yq/v4 v4.49.2
 	github.com/moby/moby/api v1.53.0
 	github.com/muesli/reflow v0.3.0
 	github.com/nxadm/tail v1.4.11
@@ -35,7 +36,7 @@ require (
 	k8s.io/kubectl v0.35.2
 	k8s.io/kubernetes v1.35.2
 	k8s.io/utils v0.0.0-20251002143259-bc988d571ff4
-	sigs.k8s.io/controller-runtime v0.23.1
+	sigs.k8s.io/controller-runtime v0.23.3
 	sigs.k8s.io/structured-merge-diff/v6 v6.3.2
 	sigs.k8s.io/yaml v1.6.0
 )
@@ -265,7 +266,6 @@ require (
 	github.com/mgechev/revive v1.13.0 // indirect
 	github.com/mgutz/ansi v0.0.0-20170206155736-9520e82c474b // indirect
 	github.com/miekg/dns v1.1.69 // indirect
-	github.com/mikefarah/yq/v4 v4.49.2 // indirect
 	github.com/minio/highwayhash v1.0.3 // indirect
 	github.com/mitchellh/go-homedir v1.1.0 // indirect
 	github.com/mitchellh/go-wordwrap v1.0.1 // indirect
