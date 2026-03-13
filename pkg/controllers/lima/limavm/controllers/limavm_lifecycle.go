@@ -402,6 +402,14 @@ func (r *LimaVMReconciler) startInstance(ctx context.Context, limaVM *v1alpha1.L
 		}{title})
 		header = string(b) + "\n"
 	}
+	// Rotate serial logs before creating hostagent logs. The VM driver
+	// overwrites serial.log on each start; rotating preserves previous boots.
+	for _, name := range []string{"serial", "serialp", "serialv"} {
+		if err := logfile.Rotate(inst.Dir, name, keepLogs); err != nil {
+			logger.Error(err, "Failed to rotate serial log", "name", name)
+		}
+	}
+
 	haStdoutW, err := logfile.Create(inst.Dir, "ha.stdout", keepLogs, header)
 	if err != nil {
 		logger.Error(err, "Failed to create stdout log file")
