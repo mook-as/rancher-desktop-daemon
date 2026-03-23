@@ -44,7 +44,12 @@ func (r *LimaVMReconciler) handleDeletion(ctx context.Context, limaVM *v1alpha1.
 		logger.Error(err, "Failed to inspect Lima instance for deletion")
 	}
 	if existingInst != nil {
-		if existingInst.Status == limatype.StatusRunning || existingInst.Status == limatype.StatusBroken {
+		// Only use PID-based force-stop for Running instances. Broken
+		// instances may have stale PID files pointing to recycled processes
+		// on Windows (Lima's ReadPIDFile treats any live PID as valid).
+		// Not tested: simulating stale PID files requires Windows-specific
+		// PID file manipulation that BATS cannot easily reproduce.
+		if existingInst.Status == limatype.StatusRunning {
 			stopInstanceForcibly(ctx, logger, existingInst)
 		} else if existingInst.VMType == limatype.WSL2 {
 			// A "stopped" WSL2 distro can retain kernel state that deadlocks
@@ -526,8 +531,8 @@ func (r *LimaVMReconciler) shutdownHostagent(ctx context.Context, name string, i
 			waitAfterKill()
 		}
 	} else {
-		logger.Info("Could not signal hostagent, killing process directly")
-		r.killHostagent(name)
+		logger.Info("No watcher for hostagent, forcing stop via stored PIDs")
+		r.killHostagent(name) // no-op if watcher absent; forceStop uses stored PIDs
 		forceStop()
 		waitAfterKill()
 	}

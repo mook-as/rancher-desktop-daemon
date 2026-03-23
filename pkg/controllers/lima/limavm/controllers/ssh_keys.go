@@ -16,6 +16,9 @@ import (
 // ensureSSHKeysAt generates an SSH keypair at privPath (and privPath+".pub")
 // if it doesn't already exist. Handles partial on-disk state from prior
 // crashes: missing public key, stale temp files, and corrupt private keys.
+//
+// Unlike Lima's DefaultPubKeys, this does not take an inter-process lock
+// because only one lima-controller runs per RDD instance.
 func ensureSSHKeysAt(ctx context.Context, privPath string) error {
 	// Bound ssh-keygen calls so a misconfigured system (e.g. hardware
 	// security module prompts, broken MSYS2 path conversion) cannot

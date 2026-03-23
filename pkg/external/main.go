@@ -275,11 +275,10 @@ func setVerbosityFromEnv() {
 		if err := flag.Set("v", "2"); err != nil {
 			fmt.Fprintf(os.Stderr, "failed to set klog verbosity: %v\n", err)
 		}
-	case "", "info":
-		// info is the default klog verbosity; nothing to change.
+	case "", "info", "warn", "warning", "error", "fatal":
+		// klog cannot suppress info-level messages, so higher logrus levels
+		// map to the default verbosity (v=0).
 	default:
-		// klog has no warn/error levels; unsupported values fall through to
-		// the default verbosity (v=0), which is equivalent to info-only.
 		fmt.Fprintf(os.Stderr, "RDD_LOG_LEVEL=%q is not supported for klog; valid values are trace, debug, info\n", level)
 	}
 }

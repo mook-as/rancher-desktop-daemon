@@ -6,7 +6,7 @@
 #
 # Usage in test files:
 #   VM_TEMPLATE=$(vm_template)         # for limavm-instance tests
-#   VM_TEMPLATE=$(vm_template_running) # for limavm-running tests (supports RDD_VM_TYPE)
+#   VM_TEMPLATE=$(vm_template_running) # for limavm-running tests (supports RDD_VM_TYPE on Unix)
 
 : "${RDD_WSL_DISTRO:=finch}"
 

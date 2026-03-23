@@ -343,11 +343,12 @@ func StopWithWait(wait bool) error {
 	// which bypasses all handlers, so we send Interrupt (CTRL_BREAK_EVENT)
 	// first to let the service run its shutdown path (shutdownAllHostagents).
 	//
-	// On Windows, Interrupt uses GenerateConsoleCtrlEvent, which only works
-	// when caller and target share a console. If invoked from a different
-	// terminal, the call fails and we fall back to Kill (TerminateProcess),
-	// bypassing graceful shutdown. Hostagents survive in their own process
-	// groups and self-heal on the next service start via killOrphanedHostagent.
+	// On Unix, Interrupt (SIGINT) always succeeds for a valid PID, so the
+	// Kill fallback never fires. On Windows, Interrupt uses
+	// GenerateConsoleCtrlEvent, which fails when caller and target lack a
+	// shared console; Kill (TerminateProcess) then bypasses graceful shutdown.
+	// Hostagents survive in their own process groups and self-heal on the
+	// next service start via killOrphanedHostagent.
 	if err := process.Interrupt(pid); err != nil {
 		if err := process.Kill(pid); err != nil {
 			return fmt.Errorf("failed to stop %q control plane with pid %d: %w", instance.Name(), pid, err)
