@@ -509,17 +509,12 @@ func (r *LimaVMReconciler) shutdownAllHostagents() {
 		case <-state.procExited:
 		case <-time.After(gracefulShutdownTimeout):
 			graceful = false
-			// The manager context is cancelled; use background context for
-			// post-shutdown cleanup.
-			if state.cmd != nil && state.cmd.Process != nil {
-				killCtx, killCancel := context.WithTimeout(context.Background(), 5*time.Second)
-				_ = process.KillTree(killCtx, state.cmd.Process.Pid)
-				killCancel()
-			}
-			<-state.procExited
 		}
 		if !graceful {
 			// Manager context is cancelled; use a fresh context for cleanup.
+			// Inspect before killing so PIDs are still valid (not yet recycled
+			// to unrelated processes). stopInstanceForcibly kills the process
+			// tree and cleans up PID/socket/tmp files in one pass.
 			logger := ctrl.Log.WithName("shutdownAllHostagents")
 			cleanupCtx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 			inst, err := store.Inspect(cleanupCtx, name)
@@ -527,6 +522,7 @@ func (r *LimaVMReconciler) shutdownAllHostagents() {
 				stopInstanceForcibly(cleanupCtx, logger, inst)
 			}
 			cancel()
+			<-state.procExited
 		}
 		state.cancel()
 		r.instanceStatesMu.Lock()

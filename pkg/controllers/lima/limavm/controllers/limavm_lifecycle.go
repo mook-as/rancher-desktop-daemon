@@ -206,6 +206,16 @@ func (r *LimaVMReconciler) handleWatchedState(ctx context.Context, limaVM *v1alp
 		}
 		// The VM driver (e.g., QEMU) may outlive the hostagent. Force-stop
 		// the instance so the next hostagent can start with a clean slate.
+		//
+		// On Windows, StatusBroken instances may have stale PID files whose
+		// PIDs were recycled to unrelated processes. stopInstanceForcibly
+		// uses taskkill, which kills by PID without verifying the process
+		// identity. The deletion path (handleDeletion) guards against this
+		// by skipping PID-based kills for StatusBroken, but this path does
+		// not — the self-healing restart that follows limits the blast
+		// radius. The proper fix is to validate process identity (e.g.,
+		// check executable name) before killing, or use Windows Job Objects
+		// to track child processes without relying on PID files.
 		if inst.Status == limatype.StatusRunning || inst.Status == limatype.StatusBroken {
 			logger.Info("Force-stopping orphaned VM driver", "status", inst.Status)
 			stopInstanceForcibly(ctx, logger, inst)
@@ -269,6 +279,7 @@ func (r *LimaVMReconciler) handleUnwatchedState(ctx context.Context, limaVM *v1a
 	case limatype.StatusRunning, limatype.StatusBroken:
 		// Orphaned hostagent from before controller restart. Kill it so the
 		// next reconcile can start with a watcher.
+		// Same PID recycling caveat as handleWatchedState (see comment above).
 		logger.Info("Found orphaned hostagent, killing it", "status", inst.Status)
 		if err := r.killOrphanedHostagent(ctx, inst); err != nil {
 			logger.Error(err, "Failed to kill orphaned hostagent")

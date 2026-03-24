@@ -6,7 +6,8 @@
 #
 # Usage in test files:
 #   VM_TEMPLATE=$(vm_template)         # for limavm-instance tests
-#   VM_TEMPLATE=$(vm_template_running) # for limavm-running tests (supports RDD_VM_TYPE on Unix)
+#   VM_TEMPLATE=$(vm_template_running) # for limavm-running tests
+# Both support RDD_VM_TYPE on Unix (expands to vmType: <value> when set).
 
 : "${RDD_WSL_DISTRO:=finch}"
 
@@ -22,7 +23,7 @@ vm_template_running() {
     if is_windows; then
         _wsl2_template
     else
-        _unix_template_running
+        _unix_template
     fi
 }
 
@@ -62,21 +63,6 @@ YAML
 }
 
 _unix_template() {
-    cat <<'YAML'
-images:
-- location: https://github.com/rancher-sandbox/rancher-desktop-opensuse/releases/download/v0.1.1/distro.v0.1.1.amd64.qcow2
-  arch: x86_64
-  digest: sha256:6a0a2729781f7a412f2d4fd7cb3270104eb16d9965811d0a39cb9766afdf3fd3
-- location: https://github.com/rancher-sandbox/rancher-desktop-opensuse/releases/download/v0.1.1/distro.v0.1.1.arm64.qcow2
-  arch: aarch64
-  digest: sha256:8e8f9dfa8292dd4e3821f44542305b01c78ec8cb007065d1bba233899ce438e8
-containerd:
-  system: false
-  user: false
-YAML
-}
-
-_unix_template_running() {
     cat <<YAML
 images:
 - location: https://github.com/rancher-sandbox/rancher-desktop-opensuse/releases/download/v0.1.1/distro.v0.1.1.amd64.qcow2

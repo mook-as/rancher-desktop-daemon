@@ -77,11 +77,9 @@ func Kill(pid int) error {
 // Returns nil if the process no longer exists (taskkill exit code 128).
 func KillTree(ctx context.Context, pid int) error {
 	err := exec.CommandContext(ctx, "taskkill", "/F", "/T", "/PID", strconv.Itoa(pid)).Run()
-	if err != nil {
-		var exitErr *exec.ExitError
-		if errors.As(err, &exitErr) && exitErr.ExitCode() == 128 {
-			return nil
-		}
+	var exitErr *exec.ExitError
+	if errors.As(err, &exitErr) && exitErr.ExitCode() == 128 {
+		return nil
 	}
 	return err
 }

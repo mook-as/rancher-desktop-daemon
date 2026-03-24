@@ -39,11 +39,21 @@ func Kill(pid int) error {
 // taskkill /F /T to walk the parent-child tree. When the target is a group
 // leader whose children remain in the same group (the expected usage), both
 // platforms produce the same result.
+//
+// If the process group does not exist (the target is not a group leader),
+// falls back to killing the individual process. This handles cases like
+// a VM driver (e.g., QEMU) that inherited its parent's process group.
+//
 // Returns nil if the process (group) no longer exists.
 func KillTree(_ context.Context, pid int) error {
 	err := unix.Kill(-pid, unix.SIGKILL)
 	if errors.Is(err, unix.ESRCH) {
-		return nil
+		// Process group does not exist — the target may not be a group
+		// leader. Fall back to killing the individual process.
+		err = unix.Kill(pid, unix.SIGKILL)
+		if errors.Is(err, unix.ESRCH) {
+			return nil
+		}
 	}
 	return err
 }
