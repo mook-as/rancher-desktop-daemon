@@ -117,6 +117,9 @@ endef
 # Generate targets for each API group
 $(foreach controller,$(CONTROLLERS),$(eval $(call CONTROLLER_TARGETS,$(controller))))
 
+# The mock controller depends on static test data.
+bin/mock-controller$(EXE): $(wildcard pkg/controllers/mock/testdata/*.json)
+
 # Meta targets
 build-all-controllers: $(addprefix build-,$(addsuffix -controller,$(CONTROLLERS)))
 .PHONY: build-all-controllers
