@@ -40,6 +40,10 @@ provision:
 
     systemctl stop rancher-desktop.target
 
+    # Write the selected container engine; docker.service and containerd.service
+    mkdir -p /etc/sysconfig
+    echo "CONTAINER_ENGINE=${PARAM_CONTAINER_ENGINE}" >/etc/sysconfig/rancher-desktop
+
     # Enable the requested container engine and disable the other.
     # containerd.service has a Conflicts=docker, so we must not start both.
     CONTAINERD_ACTION=$([[ $PARAM_CONTAINER_ENGINE = containerd ]] && echo enable || echo disable)
