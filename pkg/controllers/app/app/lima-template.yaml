@@ -92,7 +92,7 @@ probes:
     fi
 
     K3S_YAML=/etc/rancher/k3s/k3s.yaml
-    for _ in $(seq 90); do
+    for _ in $(seq 300); do
         if [[ -e $K3S_YAML ]]; then
             sleep 1
             # Rename the default context/user/cluster to "rancher-desktop".
