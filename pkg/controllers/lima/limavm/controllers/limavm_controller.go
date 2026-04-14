@@ -333,9 +333,15 @@ func (r *LimaVMReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctr
 	}
 
 	logger.Info("Created Lima instance", "instance", limaVM.Name)
+	// Patch (not Update) because Prepare() above can run for several minutes
+	// (image download + decompression), during which the app controller may
+	// propagate spec.running and bump resourceVersion. A failed Update here
+	// would leave the sentinel in place and cause the next reconcile to
+	// delete the just-prepared instance directory.
+	patch := client.MergeFrom(limaVM.DeepCopy())
 	limaVM.Status.ObservedTemplateResourceVersion = templateConfigMap.ResourceVersion
 	r.setCondition(&limaVM, ConditionCreated, metav1.ConditionTrue, ReasonCreated, "Lima instance created successfully")
-	if err := r.Status().Update(ctx, &limaVM); err != nil {
+	if err := r.Status().Patch(ctx, &limaVM, patch); err != nil {
 		logger.Error(err, "Failed to update status after instance creation")
 		return ctrl.Result{}, err
 	}
