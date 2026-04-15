@@ -36,6 +36,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
 	appv1alpha1 "github.com/rancher-sandbox/rancher-desktop-daemon/pkg/apis/app/v1alpha1"
+	cliexit "github.com/rancher-sandbox/rancher-desktop-daemon/pkg/cli/exit"
 	"github.com/rancher-sandbox/rancher-desktop-daemon/pkg/cli/help"
 	service "github.com/rancher-sandbox/rancher-desktop-daemon/pkg/service/cmd"
 	"github.com/rancher-sandbox/rancher-desktop-daemon/pkg/service/controllers"
@@ -312,7 +313,7 @@ func setAction(ctx context.Context, args []string, dryRun, wait bool, timeout ti
 	case apierrors.IsNotFound(err):
 		gen, err := createAndPatchApp(ctx, c, restConfig, specMap, specSchema, dryRun)
 		if err != nil {
-			return err
+			return classifyAPIError(err)
 		}
 		targetGen = gen
 	case err != nil:
@@ -320,7 +321,7 @@ func setAction(ctx context.Context, args []string, dryRun, wait bool, timeout ti
 	default:
 		gen, err := patchApp(ctx, c, &app, specMap, dryRun)
 		if err != nil {
-			return err
+			return classifyAPIError(err)
 		}
 		targetGen = gen
 	}
@@ -328,7 +329,22 @@ func setAction(ctx context.Context, args []string, dryRun, wait bool, timeout ti
 	if dryRun || !wait {
 		return nil
 	}
-	return waitForDesiredState(ctx, restConfig, properties, timeout, targetGen)
+	if err := waitForDesiredState(ctx, restConfig, properties, timeout, targetGen); err != nil {
+		if errors.Is(err, context.DeadlineExceeded) {
+			return cliexit.Timeout(err)
+		}
+		return err
+	}
+	return nil
+}
+
+// classifyAPIError tags admission-controller rejections with
+// [cliexit.CodeRejected]. Other API errors pass through unchanged.
+func classifyAPIError(err error) error {
+	if apierrors.IsInvalid(err) || apierrors.IsBadRequest(err) || apierrors.IsForbidden(err) {
+		return cliexit.Rejected(err)
+	}
+	return err
 }
 
 // createAndPatchApp creates the App using the dynamic client so that

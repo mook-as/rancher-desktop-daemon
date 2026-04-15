@@ -34,6 +34,17 @@ rdd set --dry-run running=true
 rdd set --wait=false running=true
 ```
 
+### Exit codes
+
+| Code | Meaning |
+|------|---------|
+| `0` | Success. |
+| `1` | Generic / internal error. |
+| `3` | The API server's admission controller rejected the request. |
+| `4` | The wait deadline expired before the desired state was reached. |
+
+`2` is reserved for cobra usage errors. Other rdd commands will adopt the same scheme as they grow `--wait` semantics; the codes are defined in `pkg/cli/exit`.
+
 ## `rdd create`
 
 
