@@ -359,7 +359,12 @@ local_setup_file() {
     rdd set --timeout=10s running=false
 }
 
-@test "restarting VM restores ContainerEngineReady and moby namespace" {
+@test "VM start recreates ContainerNamespace/moby after cleanup" {
+    # The "stopping VM removes all mirror resources" test above swept
+    # ContainerNamespace/moby along with the rest of the mirrors, so
+    # restarting the VM must recreate it. This bridges the teardown
+    # above to the ContainerNamespace delete test below, which needs
+    # the namespace to exist before it can delete it.
     rdd set running=true
     rdd ctl wait --for=create --namespace="${RDD_NAMESPACE}" \
         ContainerNamespace/moby --timeout=10s
