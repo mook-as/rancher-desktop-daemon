@@ -106,29 +106,25 @@ func (r *EngineReconciler) Reconcile(ctx context.Context, _ ctrl.Request) (ctrl.
 	running := meta.IsStatusConditionTrue(app.Status.Conditions, appv1alpha1.AppConditionRunning)
 	engineIsDocker := app.Spec.ContainerEngine.Name == engineMoby
 
-	// Detach a dead watcher under watcherMu, then stop it outside the
-	// lock: w.stop() blocks on <-w.done and cli.Close() and would stall
-	// the shutdown hook if it fired while the lock was held.
-	//
 	// Treat a dead watcher as a transient disconnect and fall through.
-	// If wantWatcher is still true below, a fresh watcher's fullSync
-	// reconciles drift in place — existing mirror resources keep their
-	// identity, so downstream clients see no churn. An actual stop or
-	// backend change is handled by the !wantWatcher branch, which
-	// sweeps the mirrors.
-	var diedWatcher *dockerWatcher
+	// The watcher's run goroutine closes the Docker client in its own
+	// deferred cleanup, so Reconcile only needs to forget the
+	// reference. If wantWatcher is still true below, a fresh watcher's
+	// fullSync reconciles drift in place — existing mirror resources
+	// keep their identity, so downstream clients see no churn. The
+	// !wantWatcher branch below handles an actual stop or backend
+	// change by sweeping the mirrors.
+	var watcherDied bool
 	r.watcherMu.Lock()
 	watcherRunning := r.watcher != nil
 	if watcherRunning && !r.watcher.alive() {
-		diedWatcher = r.watcher
 		r.watcher = nil
 		watcherRunning = false
+		watcherDied = true
 	}
 	r.watcherMu.Unlock()
-	watcherDied := diedWatcher != nil
 	if watcherDied {
 		log.Info("Docker watcher died, will attempt to reconnect")
-		diedWatcher.stop()
 	}
 
 	// The watcher runs only when the App is Running on the moby

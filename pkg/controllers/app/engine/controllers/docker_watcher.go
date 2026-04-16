@@ -118,10 +118,11 @@ func dockerEventsSince(ctx context.Context, cli *dockerclient.Client) (string, e
 }
 
 // stop cancels the watcher goroutine and waits for it to finish.
+// run's deferred cleanup closes the Docker client; stop only signals
+// the goroutine and blocks until it exits.
 func (w *dockerWatcher) stop() {
 	w.cancel()
 	<-w.done
-	w.cli.Close()
 }
 
 // alive returns true if the watcher goroutine is still running.
@@ -136,13 +137,25 @@ func (w *dockerWatcher) alive() bool {
 
 // run is the main watcher goroutine. since is the Docker events
 // "Since" filter captured before fullSync.
+//
+// run owns the Docker client's lifetime: it closes cli before
+// returning, so a caller that observes alive()==false can drop its
+// reference to the watcher without a separate cleanup step.
 func (w *dockerWatcher) run(ctx context.Context, since string) {
 	log := logf.FromContext(ctx).WithName("docker-watcher")
-	// Defers fire LIFO: close(w.done) runs first, then enqueueReconcile.
-	// The order matters — if enqueueReconcile ran before w.done closed,
+	// Defers fire LIFO, giving this exit sequence:
+	//
+	//   1. close(w.done)       — alive() now returns false
+	//   2. w.cli.Close()       — Docker client released
+	//   3. w.enqueueReconcile() — reconciler wakes and sees !alive()
+	//
+	// The order matters: if enqueueReconcile ran before w.done closed,
 	// the reconciler could wake, see alive()==true on the about-to-exit
-	// goroutine, and skip the restart.
+	// goroutine, and skip the restart. Closing cli between done and
+	// enqueue means the reconciler observes the dead watcher only
+	// after its client has been released.
 	defer w.enqueueReconcile()
+	defer w.cli.Close()
 	defer close(w.done)
 	// Keep a bad event shape from crashing the whole app-controller.
 	defer func() {
