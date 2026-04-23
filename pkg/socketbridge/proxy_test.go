@@ -8,31 +8,48 @@ import (
 	"io"
 	"testing"
 
+	"gotest.tools/v3/assert"
+
 	"github.com/rancher-sandbox/rancher-desktop-daemon/pkg/socketbridge"
 )
 
 // splitConn wraps separate read/write ends so the external test code and the
-// Pipe function each own one side of the IO.  It is meant to satisfy HalfCloser functionality.
+// Pipe function each own one side of the IO.  It satisfies HalfCloser.
 //
-// How the test is layed out (a and b are two individual and unrelated connections):
+// How the test is laid out (a and b are two separate, unrelated connections):
 //
-//	external→aIn_w  [pipe1]  aIn_r→a.Read   Pipe copies→  b.Write→bOut_w  [pipe3]  bOut_r→external
-//	external→bIn_w  [pipe2]  bIn_r→b.Read   Pipe copies→  a.Write→aOut_w  [pipe4]  aOut_r→external
+//	external→aIn  [pipe1]  a.Read   Pipe copies→  b.Write→bOut  [pipe3]  bOut→external
+//	external→bIn  [pipe2]  b.Read   Pipe copies→  a.Write→aOut  [pipe4]  aOut→external
 type splitConn struct {
-	r          *io.PipeReader
-	w          *io.PipeWriter
-	writeDone  bool
+	r         *io.PipeReader
+	w         *io.PipeWriter
+	writeDone bool
 }
 
-func newSplitConnPair() (a, b *splitConn, aIn, bIn *io.PipeWriter, aOut, bOut *io.PipeReader) {
-	aIn_r, aIn_w := io.Pipe()
-	bIn_r, bIn_w := io.Pipe()
-	aOut_r, aOut_w := io.Pipe()
-	bOut_r, bOut_w := io.Pipe()
+// splitConnPair bundles the two splitConns and their exposed pipe ends so
+// callers avoid functions with more than five return values.
+type splitConnPair struct {
+	A, B *splitConn
+	AIn  *io.PipeWriter
+	BIn  *io.PipeWriter
+	AOut *io.PipeReader
+	BOut *io.PipeReader
+}
 
-	a = &splitConn{r: aIn_r, w: aOut_w}
-	b = &splitConn{r: bIn_r, w: bOut_w}
-	return a, b, aIn_w, bIn_w, aOut_r, bOut_r
+func newSplitConnPair() splitConnPair {
+	aInR, aInW := io.Pipe()
+	bInR, bInW := io.Pipe()
+	aOutR, aOutW := io.Pipe()
+	bOutR, bOutW := io.Pipe()
+
+	return splitConnPair{
+		A:    &splitConn{r: aInR, w: aOutW},
+		B:    &splitConn{r: bInR, w: bOutW},
+		AIn:  aInW,
+		BIn:  bInW,
+		AOut: aOutR,
+		BOut: bOutR,
+	}
 }
 
 func (c *splitConn) Read(p []byte) (int, error)  { return c.r.Read(p) }
@@ -45,6 +62,7 @@ func (c *splitConn) Close() error {
 	}
 	return werr
 }
+
 func (c *splitConn) CloseWrite() error {
 	if c.writeDone {
 		return nil
@@ -54,64 +72,53 @@ func (c *splitConn) CloseWrite() error {
 }
 
 func TestPipe_BidirectionalData(t *testing.T) {
-	a, b, aIn, bIn, aOut, bOut := newSplitConnPair()
+	p := newSplitConnPair()
 
 	pipeDone := make(chan error, 1)
-	go func() { pipeDone <- socketbridge.Pipe(a, b) }()
+	go func() { pipeDone <- socketbridge.Pipe(p.A, p.B) }()
 
 	const fromA = "hello from A side"
 	const fromB = "reply from B side"
 
-	// Write to a's input should emerge from b's output.
+	// Write to A's input; should emerge from B's output.
 	go func() {
-		if _, err := aIn.Write([]byte(fromA)); err != nil {
-			t.Errorf("writing to aIn: %v", err)
+		if _, err := p.AIn.Write([]byte(fromA)); err != nil {
+			t.Errorf("writing to AIn: %v", err)
 		}
-		aIn.Close()
+		p.AIn.Close()
 	}()
 
 	got := make([]byte, len(fromA))
-	if _, err := io.ReadFull(bOut, got); err != nil {
-		t.Fatalf("reading from bOut: %v", err)
-	}
-	if string(got) != fromA {
-		t.Errorf("bOut got %q, want %q", got, fromA)
-	}
+	_, err := io.ReadFull(p.BOut, got)
+	assert.NilError(t, err)
+	assert.Equal(t, string(got), fromA)
 
-	// Write to b's input should emerge from a's output.
+	// Write to B's input; should emerge from A's output.
 	go func() {
-		if _, err := bIn.Write([]byte(fromB)); err != nil {
-			t.Errorf("writing to bIn: %v", err)
+		if _, err := p.BIn.Write([]byte(fromB)); err != nil {
+			t.Errorf("writing to BIn: %v", err)
 		}
-		bIn.Close()
+		p.BIn.Close()
 	}()
 
 	got2 := make([]byte, len(fromB))
-	if _, err := io.ReadFull(aOut, got2); err != nil {
-		t.Fatalf("reading from aOut: %v", err)
-	}
-	if string(got2) != fromB {
-		t.Errorf("aOut got %q, want %q", got2, fromB)
-	}
+	_, err = io.ReadFull(p.AOut, got2)
+	assert.NilError(t, err)
+	assert.Equal(t, string(got2), fromB)
 
-	if err := <-pipeDone; err != nil {
-		t.Errorf("Pipe returned unexpected error: %v", err)
-	}
+	assert.NilError(t, <-pipeDone)
 }
 
 func TestPipe_HalfClose(t *testing.T) {
-	// Verify Pipe completes cleanly with no errors when both input sides are closed without
-	// writing any data, EOF should propagate via CloseWrite to the other side.
-	a, b, aIn, bIn, _, _ := newSplitConnPair()
+	// Verify Pipe completes cleanly when both input sides are closed without
+	// writing any data; EOF propagates via CloseWrite to the other side.
+	p := newSplitConnPair()
 
 	pipeDone := make(chan error, 1)
-	go func() { pipeDone <- socketbridge.Pipe(a, b) }()
+	go func() { pipeDone <- socketbridge.Pipe(p.A, p.B) }()
 
-	aIn.Close()
-	bIn.Close()
+	p.AIn.Close()
+	p.BIn.Close()
 
-	if err := <-pipeDone; err != nil {
-		t.Errorf("Pipe returned unexpected error: %v", err)
-	}
+	assert.NilError(t, <-pipeDone)
 }
-

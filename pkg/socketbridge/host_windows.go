@@ -73,9 +73,6 @@ func (b *HostBridge) Run(ctx context.Context) error {
 	}
 }
 
-// TODO: once rancher-desktop-daemon is public, consolidate with the guest-side
-// handleConn in rancher-desktop-opensuse/src/rdd-guest/main.go by importing
-// pkg/socketbridge directly instead of inlining the proxy logic.
 func (b *HostBridge) handleConn(pipeConn net.Conn) {
 	defer pipeConn.Close()
 
@@ -100,10 +97,14 @@ func (b *HostBridge) handleConn(pipeConn net.Conn) {
 	done := make(chan struct{})
 	go func() {
 		defer close(done)
-		io.Copy(pipeConn, vsockConn)
+		if _, err := io.Copy(pipeConn, vsockConn); err != nil {
+			b.log.Error(err, "Copy vsock→pipe error")
+		}
 		pipeConn.Close()
 	}()
-	io.Copy(vsockConn, pipeConn)
+	if _, err := io.Copy(vsockConn, pipeConn); err != nil {
+		b.log.Error(err, "Copy pipe→vsock error")
+	}
 	vsockConn.Close()
 	<-done
 }

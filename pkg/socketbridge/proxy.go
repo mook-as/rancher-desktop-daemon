@@ -8,6 +8,7 @@
 package socketbridge
 
 import (
+	"errors"
 	"io"
 	"sync"
 )
@@ -34,7 +35,7 @@ func Pipe(c1, c2 HalfCloser) error {
 	var mu sync.Mutex
 
 	record := func(err error) {
-		if err != nil && err != io.EOF {
+		if err != nil && !errors.Is(err, io.EOF) {
 			mu.Lock()
 			if firstErr == nil {
 				firstErr = err
@@ -43,7 +44,7 @@ func Pipe(c1, c2 HalfCloser) error {
 		}
 	}
 
-	copy := func(dst, src HalfCloser) {
+	forward := func(dst, src HalfCloser) {
 		defer wg.Done()
 		_, err := io.Copy(dst, src)
 		record(err)
@@ -52,8 +53,8 @@ func Pipe(c1, c2 HalfCloser) error {
 	}
 
 	wg.Add(2)
-	go copy(c1, c2)
-	go copy(c2, c1)
+	go forward(c1, c2)
+	go forward(c2, c1)
 	wg.Wait()
 
 	c1.Close()
