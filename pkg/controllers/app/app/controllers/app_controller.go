@@ -227,12 +227,11 @@ func (r *AppReconciler) Reconcile(ctx context.Context, _ ctrl.Request) (ctrl.Res
 		return ctrl.Result{}, limaVMErr
 	}
 
-	// If the Kubernetes port is not set, resolve and persist it now.
-	// ResolvePort closes the listener immediately after probing, so there is
-	// a TOCTOU window before Lima binds the same port via its identity
-	// port-forward rule. In the unlikely event the port is stolen, Lima's
-	// forwarding fails and KubernetesReady stays False — a visible failure
-	// rather than a silent wrong connection. See AppStatus.KubernetesPort.
+	// Resolve the host port for the k3s API and persist it. ResolvePort
+	// closes the listener immediately after probing, leaving a TOCTOU
+	// window before Lima's identity port-forward rule binds the same port
+	// (see AppStatus.KubernetesPort). If the port is stolen during that
+	// window, Lima logs a warning and kubectl gets connection refused.
 	if app.Spec.Kubernetes.Enabled && app.Status.KubernetesPort == 0 {
 		port, err := controllers.ResolvePort(ctx, 7441+instance.Index())
 		if err != nil {
