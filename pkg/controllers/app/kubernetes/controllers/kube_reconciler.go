@@ -124,7 +124,7 @@ func (r *KubernetesReconciler) Reconcile(ctx context.Context, _ ctrl.Request) (c
 // server. Returns (false, err) when the kubeconfig is unreadable, (false, nil)
 // when the server is unhealthy, and (true, nil) on success.
 func probeK3sAPI(ctx context.Context) (bool, error) {
-	kubeconfigPath := instance.Config()
+	kubeconfigPath := instance.K3sConfig()
 	data, err := os.ReadFile(kubeconfigPath)
 	if err != nil {
 		return false, fmt.Errorf("read instance kubeconfig: %w", err)
@@ -141,6 +141,14 @@ func probeK3sAPI(ctx context.Context) (bool, error) {
 		pool := x509.NewCertPool()
 		pool.AppendCertsFromPEM(cfg.CAData)
 		tlsCfg.RootCAs = pool
+	}
+	// Load client cert for mTLS auth (k3s kubeconfig uses client cert, not bearer token).
+	if len(cfg.CertData) > 0 && len(cfg.KeyData) > 0 {
+		cert, err := tls.X509KeyPair(cfg.CertData, cfg.KeyData)
+		if err != nil {
+			return false, fmt.Errorf("load client cert: %w", err)
+		}
+		tlsCfg.Certificates = []tls.Certificate{cert}
 	}
 	httpClient := &http.Client{
 		Transport: &http.Transport{TLSClientConfig: tlsCfg},
@@ -176,7 +184,7 @@ func (r *KubernetesReconciler) manageKubeContext(ctx context.Context) {
 	contextName := instance.Name()
 	log := logf.FromContext(ctx).WithName("kube-context")
 
-	if err := createReplaceKubeContext(contextName, instance.Config()); err != nil {
+	if err := createReplaceKubeContext(contextName, instance.K3sConfig()); err != nil {
 		log.Error(err, "Failed to create Kubernetes context", "context", contextName)
 		return
 	}
@@ -209,12 +217,6 @@ func (r *KubernetesReconciler) manageKubeContext(ctx context.Context) {
 			r.contextMu.Unlock()
 			cancel()
 		}()
-
-		// Skip if KUBECONFIG is set — rewriting ~/.kube/config current-context
-		// has no effect and may clobber a user preference.
-		if os.Getenv("KUBECONFIG") != "" {
-			return
-		}
 
 		current, err := getCurrentKubeContext()
 		if err != nil {
@@ -279,6 +281,14 @@ func probeCurrentKubeContext(ctx context.Context, current string) bool {
 		pool := x509.NewCertPool()
 		pool.AppendCertsFromPEM(restCfg.CAData)
 		tlsCfg.RootCAs = pool
+	}
+	// Load client cert for mTLS auth (k3s kubeconfig uses client cert, not bearer token).
+	if len(restCfg.CertData) > 0 && len(restCfg.KeyData) > 0 {
+		cert, err := tls.X509KeyPair(restCfg.CertData, restCfg.KeyData)
+		if err != nil {
+			return true // assume healthy if we can't load the cert
+		}
+		tlsCfg.Certificates = []tls.Certificate{cert}
 	}
 	httpClient := &http.Client{
 		Transport: &http.Transport{TLSClientConfig: tlsCfg},
